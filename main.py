@@ -121,7 +121,7 @@ class GroqAIService:
                     "Content-Type": "application/json"
                 },
                 json={
-                    "model": "llama3-8b-8192",  # Model Ai
+                    "model": "llama-3.1-8b-instant",  # Model Ai
                     "messages": [
                         {
                             "role": "system", 
