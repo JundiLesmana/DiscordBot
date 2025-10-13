@@ -1,7 +1,7 @@
-# ARC-0104 Discord Bot
+# Techfour Discord Bot
 
 AI-powered Discord bot with Groq integration.
-
+A bot that simplifies the learning system and community management of artificial intelligence developed for the needs of class 01TPLE04 Informatics Engineering at Pamulang University
 ## Features
 - 🤖 Groq AI Chat
 - ⏰ Rate Limiting (30/day per user)
