@@ -80,7 +80,7 @@ def get_user_mention(user_id):
 
 async def send_error_message(channel, user_mention=None):
     """Kirim pesan error standar"""
-    error_msg = "🤖 Maaf, saat ini Anda tidak bisa menggunakan AI. Silahkan menghubungi developer - Jundi Lesmana (@jonjon1227)"
+    error_msg = "🤖 Maaf, saat ini Anda tidak bisa menggunakan AI. Silahkan menghubungi developer - Jundi Lesmana @jonjon1227"
     if user_mention:
         error_msg = f"{user_mention} {error_msg}"
     await channel.send(error_msg)
@@ -125,7 +125,7 @@ class GroqAIService:
                     "messages": [
                         {
                             "role": "system", 
-                            "content": "Kamu adalah ARC-0104, AI asisten ramah di Discord server Teknik Informatika 01TPLE004. Jawablah dengan singkat dan jelas."
+                            "content": "Kamu adalah Techfour, AI asisten ramah di Discord server Teknik Informatika 01TPLE004. Jawablah dengan singkat dan jelas."
                         },
                         {"role": "user", "content": user_prompt}
                     ],
@@ -199,7 +199,7 @@ async def on_ready():
     await bot.change_presence(
         activity=discord.Activity(
             type=discord.ActivityType.listening, 
-            name="!ping | @ARC-0104"
+            name="!ping | @Techfour"
         )
     )
 
