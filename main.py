@@ -191,7 +191,7 @@ async def reset_daily_task():
 async def keep_alive_ping():
     """Ping untuk menjaga bot tetap hidup"""
     try:
-        # Clean up cache lama
+        # Clean up old cache
         current_time = time.time()
         expired_keys = [
             key for key, data in response_cache.items() 
@@ -204,12 +204,11 @@ async def keep_alive_ping():
     except Exception as e:
         logging.error(f"Keep alive error: {e}")
 
-#  WELCOME & GOODBYE MESSAGES
+# WELCOME & GOODBYE MESSAGES
 @bot.event
 async def on_member_join(member):
     """Kirim pesan welcome ketika user join server"""
     try:
-        # Look for the general or first accessible channel
         channel = None
         for ch in member.guild.channels:
             if isinstance(ch, discord.TextChannel) and ch.permissions_for(member.guild.me).send_messages:
@@ -227,7 +226,6 @@ async def on_member_join(member):
 async def on_member_remove(member):
     """Kirim pesan goodbye ketika user leave server"""
     try:
-        # Look for the general or first accessible channel
         channel = None
         for ch in member.guild.channels:
             if isinstance(ch, discord.TextChannel) and ch.permissions_for(member.guild.me).send_messages:
@@ -240,7 +238,7 @@ async def on_member_remove(member):
             logging.info(f"Goodbye message sent for {member.name}")
     except Exception as e:
         logging.error(f"Error sending goodbye message: {e}")
-
+        
 # 🚀 Event: Bot ready
 @bot.event
 async def on_ready():
