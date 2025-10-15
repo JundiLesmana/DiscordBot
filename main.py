@@ -8,8 +8,26 @@ import asyncio
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 import aiohttp
+from flask import Flask
+from threading import Thread
 
-#  Clean up old logs & prepare new logging
+# WEB SERVER FOR RAILWAY
+app = Flask('')
+
+@app.route('/')
+def home():
+    return "🤖 Techfour Bot is Alive! Powered by Groq AI"
+
+def run_webserver():
+    port = int(os.environ.get("PORT", 8080))
+    app.run(host='0.0.0.0', port=port)
+
+def keep_alive():
+    t = Thread(target=run_webserver)
+    t.daemon = True
+    t.start()
+
+# Clean up old logs & prepare new logging
 if os.path.exists("discord.log"):
     os.remove("discord.log")
 
@@ -21,7 +39,7 @@ logging.basicConfig(
 )
 logging.info("=== Bot dimulai fresh ===")
 
-# Load token & API key from .env
+# Load token & API key .env
 load_dotenv()
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
@@ -33,6 +51,7 @@ if not DISCORD_TOKEN:
 intents = discord.Intents.default()
 intents.message_content = True
 intents.members = True
+intents.guilds = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 # Rate Limiting & Monitoring System
@@ -40,9 +59,9 @@ user_cooldowns = {}  # {user_id: last_request_time}
 user_daily_usage = {}  # {user_id: count}
 last_reset_time = time.time()
 
-# Cache for efficient batching
+# Cache untuk efficient batching
 response_cache = {}
-CACHE_DURATION = 300  # 5 minutes
+CACHE_DURATION = 300  # 5 menit
 
 # 🔧 Utility Functions
 def reset_daily_limits():
@@ -56,16 +75,16 @@ def can_user_request(user_id):
     """Cek apakah user bisa membuat request"""
     current_time = time.time()
     
-    # Check 1 minute cooldown
+    # Cek cooldown 1 menit
     if user_id in user_cooldowns:
         time_since_last = current_time - user_cooldowns[user_id]
         if time_since_last < 60:
             return False, f"⏳ Maaf {get_user_mention(user_id)}, kamu harus menunggu {int(60 - time_since_last)} detik lagi sebelum bisa menggunakan AI."
     
-# Check daily limit 30 requests
+    # Cek daily limit 30 requests
     daily_count = user_daily_usage.get(user_id, 0)
     if daily_count >= 30:
-        return False, f"🚫 Maaf {get_user_mention(user_id)}, limit harianmu (30 prompt) sudah habis. Limit akan direset dalam 24 jam."
+        return False, f"🚫 Maaf {get_user_mention(user_id)}, limit harianmu sudah habis. Limit akan direset dalam 24 jam."
     
     return True, None
 
@@ -85,7 +104,7 @@ async def send_error_message(channel, user_mention=None):
         error_msg = f"{user_mention} {error_msg}"
     await channel.send(error_msg)
 
-#  Groq AI Service with Efficient Batching
+# Groq AI Service dengan Efficient Batching
 class GroqAIService:
     def __init__(self, api_key):
         self.api_key = api_key
@@ -170,9 +189,9 @@ async def reset_daily_task():
 
 @tasks.loop(minutes=5)
 async def keep_alive_ping():
-    """Ping untuk menjaga Replit tetap hidup"""
+    """Ping untuk menjaga bot tetap hidup"""
     try:
-        # Clean up old cache
+        # Clean up cache lama
         current_time = time.time()
         expired_keys = [
             key for key, data in response_cache.items() 
@@ -185,11 +204,53 @@ async def keep_alive_ping():
     except Exception as e:
         logging.error(f"Keep alive error: {e}")
 
-# Event: Bot Ready
+#  WELCOME & GOODBYE MESSAGES
+@bot.event
+async def on_member_join(member):
+    """Kirim pesan welcome ketika user join server"""
+    try:
+        # Look for the general or first accessible channel
+        channel = None
+        for ch in member.guild.channels:
+            if isinstance(ch, discord.TextChannel) and ch.permissions_for(member.guild.me).send_messages:
+                channel = ch
+                break
+        
+        if channel:
+            welcome_message = f"🎉 Selamat datang di server **{member.guild.name}** {member.mention}! Semoga betah ya!"
+            await channel.send(welcome_message)
+            logging.info(f"Welcome message sent for {member.name}")
+    except Exception as e:
+        logging.error(f"Error sending welcome message: {e}")
+
+@bot.event
+async def on_member_remove(member):
+    """Kirim pesan goodbye ketika user leave server"""
+    try:
+        # Look for the general or first accessible channel
+        channel = None
+        for ch in member.guild.channels:
+            if isinstance(ch, discord.TextChannel) and ch.permissions_for(member.guild.me).send_messages:
+                channel = ch
+                break
+        
+        if channel:
+            goodbye_message = f"👋 Selamat tinggal **{member.name}**! Semoga sukses di mana pun!"
+            await channel.send(goodbye_message)
+            logging.info(f"Goodbye message sent for {member.name}")
+    except Exception as e:
+        logging.error(f"Error sending goodbye message: {e}")
+
+# 🚀 Event: Bot ready
 @bot.event
 async def on_ready():
     print(f"✅ Logged in as {bot.user.name} (ID: {bot.user.id})")
+    print(f"🌐 Connected to {len(bot.guilds)} servers")
     logging.info(f"Bot siap dengan PID: {os.getpid()}")
+    
+    # Start web server untuk Railway
+    keep_alive()
+    print("🌐 Web server started for Railway deployment")
     
     # Start background tasks
     reset_daily_task.start()
@@ -207,7 +268,7 @@ async def on_ready():
 CARIAMAN_KEYWORDS = ["prabowo", "jokowi", "megawati", "sukarno", "luhut", "puan"]
 TOXIC_KEYWORDS = ["kontol", "memek", "titit", "mmk", "jembut", "bangsat", "ngentod", "peler"]
 
-# Event: Incoming messages with Rate Limitation
+#  Event: Incoming message with Rate Limiting
 @bot.event
 async def on_message(message):
     if message.author == bot.user:
@@ -224,7 +285,7 @@ async def on_message(message):
             pass
         return
 
-    # If the bot is mentioned (and not mention everyone)
+    #If the bot is mentioned (and not mention everyone)
     if bot.user.mentioned_in(message) and not message.mention_everyone:
         user_prompt = message.content.replace(f"<@{bot.user.id}>", "").replace(f"<@!{bot.user.id}>", "").strip()
         
@@ -248,7 +309,7 @@ async def on_message(message):
             return
 
         try:
-            # Get response from Groq
+            #Get response from Groq
             reply = await groq_service.get_response(user_prompt, message.author.id)
             
             if reply:
@@ -266,7 +327,7 @@ async def on_message(message):
 
     await bot.process_commands(message)
 
-#  Command: Ping with info status
+# Command: Ping dengan status info
 @bot.command()
 async def ping(ctx):
     latency = round(bot.latency * 1000)
@@ -279,7 +340,8 @@ async def ping(ctx):
     embed.add_field(name="Latency", value=f"{latency}ms", inline=True)
     embed.add_field(name="Daily Usage", value=f"{daily_usage}/30", inline=True)
     embed.add_field(name="AI Status", value="✅ Active" if groq_service else "❌ Offline", inline=True)
-    
+    embed.add_field(name="Server Count", value=f"{len(bot.guilds)}", inline=True)
+
     await ctx.send(embed=embed)
 
 # Command: Check usage
@@ -298,7 +360,7 @@ async def usage(ctx):
     
     await ctx.send(embed=embed)
 
-#  Command: Assign Role
+# Command: Assign Role
 @bot.command()
 async def assign(ctx, *, role_name: str):
     role = discord.utils.get(ctx.guild.roles, name=role_name)
@@ -313,7 +375,7 @@ async def assign(ctx, *, role_name: str):
     except Exception as e:
         await ctx.send(f"Terjadi error: {e}")
 
-#  Command: Admin - Reset limits
+# Command: Admin - Reset limits
 @bot.command()
 @commands.has_permissions(administrator=True)
 async def reset_limits(ctx, user: discord.Member = None):
@@ -325,14 +387,36 @@ async def reset_limits(ctx, user: discord.Member = None):
         reset_daily_limits()
         await ctx.send("✅ Semua daily limits telah direset!")
 
-# Running bot with error handling
+# Command: Setup Welcome Channel
+@bot.command()
+@commands.has_permissions(administrator=True)
+async def setup_welcome(ctx):
+    """Setup channel welcome khusus"""
+    try:
+        # Buat channel welcome jika belum ada
+        welcome_channel = discord.utils.get(ctx.guild.channels, name="welcome")
+        if not welcome_channel:
+            welcome_channel = await ctx.guild.create_text_channel("welcome")
+            await ctx.send(f"✅ Channel welcome dibuat: {welcome_channel.mention}")
+        else:
+            await ctx.send(f"✅ Channel welcome sudah ada: {welcome_channel.mention}")
+    except Exception as e:
+        await ctx.send(f"❌ Error setup welcome channel: {e}")
+
+# Run bot with error handling
 async def main():
     try:
+        # Start web server for Railway
+        keep_alive()
+        print("🚀 Starting Techfour Discord Bot...")
+        
+        # Start Discord bot
         await bot.start(DISCORD_TOKEN)
     except Exception as e:
         logging.exception(f"Bot crashed: {e}")
     finally:
-        await groq_service.close_session()
+        if groq_service:
+            await groq_service.close_session()
         await bot.close()
 
 if __name__ == "__main__":
