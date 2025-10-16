@@ -310,6 +310,7 @@ async def check_inactive_members():
     except Exception as e:
         logging.error(f"Error in inactive members check: {e}")
 
+# ✅ PERBAIKAN: GANTI '-' MENJADI '=' DI BARIS INI
 @tasks.loop(time=datetime.time(hour=18, minute=0))  # Every day at 18:00
 async def friday_reminder():
     """Kirim reminder setiap Jumat jam 18:00"""
