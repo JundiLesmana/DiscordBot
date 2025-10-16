@@ -334,7 +334,7 @@ async def friday_reminder():
                             
         except Exception as e:
             logging.error(f"Error in Friday reminder: {e}")
-
+            
 # 🎯 EVENT HANDLERS
 @bot.event
 async def on_member_join(member: discord.Member):
