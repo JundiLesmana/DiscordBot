@@ -2,9 +2,9 @@ import discord
 from discord.ext import commands, tasks
 import logging
 import os
-import time
+import time as py_time  # renamed to avoid conflict with datetime.time
 import asyncio
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, time  # <-- added 'time' here
 from dotenv import load_dotenv
 import aiohttp
 from flask import Flask
@@ -53,7 +53,7 @@ intents = discord.Intents.default()
 intents.message_content = True
 intents.members = True
 intents.guilds = True
-intents.presences = True  #tracking activity member
+intents.presences = True  # tracking activity member
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
@@ -62,19 +62,19 @@ class RateLimiter:
     def __init__(self):
         self.user_cooldowns: Dict[int, float] = {}
         self.user_daily_usage: Dict[int, int] = {}
-        self.last_reset_time: float = time.time()
+        self.last_reset_time: float = py_time.time()
         self.active_ai_requests: int = 0
         self.ai_request_lock = asyncio.Lock()
         
     def reset_daily_limits(self):
         """Reset daily usage setiap 24 jam"""
         self.user_daily_usage.clear()
-        self.last_reset_time = time.time()
+        self.last_reset_time = py_time.time()
         logging.info("Daily limits reset")
     
     async def can_use_ai(self, user_id: int) -> tuple[bool, Optional[str]]:
         """Cek apakah user bisa menggunakan AI dengan concurrent limit"""
-        current_time = time.time()
+        current_time = py_time.time()
         
         # Cek concurrent requests (maximal 2)
         async with self.ai_request_lock:
@@ -98,7 +98,7 @@ class RateLimiter:
         """Mulai AI request dan update tracking"""
         async with self.ai_request_lock:
             self.active_ai_requests += 1
-        self.user_cooldowns[user_id] = time.time()
+        self.user_cooldowns[user_id] = py_time.time()
         self.user_daily_usage[user_id] = self.user_daily_usage.get(user_id, 0) + 1
     
     async def end_ai_request(self):
@@ -127,7 +127,6 @@ class ActivityTracker:
                 continue
                 
             user_id = member.id
-            # If the user has never been registered, assume they have just joined.
             if user_id not in self.last_activity:
                 self.last_activity[user_id] = now
                 continue
@@ -180,7 +179,7 @@ webhook_logger = WebhookLogger(WEBHOOK_URL)
 class GroqAIService:
     def __init__(self, api_key: str):
         self.api_key = api_key
-        self.base_url = "https://api.groq.com/openai/v1/chat/completions"
+        self.base_url = "https://api.groq.com/openai/v1/chat/completions"  # removed trailing spaces
         self.session: Optional[aiohttp.ClientSession] = None
         self.response_cache: Dict[str, dict] = {}
         self.CACHE_DURATION = 300  # 5 menit
@@ -197,11 +196,10 @@ class GroqAIService:
     
     async def get_response(self, user_prompt: str, user_id: int) -> Optional[str]:
         """Dapatkan response dari Groq AI dengan caching"""
-        # Check cache
         cache_key = f"{user_id}_{user_prompt[:50]}"
         if cache_key in self.response_cache:
             cached_data = self.response_cache[cache_key]
-            if time.time() - cached_data['timestamp'] < self.CACHE_DURATION:
+            if py_time.time() - cached_data['timestamp'] < self.CACHE_DURATION:
                 return cached_data['response']
         
         try:
@@ -236,10 +234,9 @@ class GroqAIService:
                 data = await response.json()
                 reply = data["choices"][0]["message"]["content"].strip()
                 
-                # Save to cache
                 self.response_cache[cache_key] = {
                     'response': reply,
-                    'timestamp': time.time()
+                    'timestamp': py_time.time()
                 }
                 
                 return reply
@@ -253,7 +250,7 @@ class GroqAIService:
     
     def clean_old_cache(self):
         """Bersihkan cache yang sudah expired"""
-        current_time = time.time()
+        current_time = py_time.time()
         expired_keys = [
             key for key, data in self.response_cache.items() 
             if current_time - data['timestamp'] > self.CACHE_DURATION
@@ -266,34 +263,29 @@ groq_service = GroqAIService(GROQ_API_KEY) if GROQ_API_KEY else None
 # ⏰ BACKGROUND TASKS
 @tasks.loop(hours=24)
 async def reset_daily_task():
-    """Reset daily limits setiap 24 jam"""
     rate_limiter.reset_daily_limits()
     logging.info("Daily limits reset via background task")
 
 @tasks.loop(minutes=5)
 async def clean_cache_task():
-    """Bersihkan cache secara berkala"""
     if groq_service:
         groq_service.clean_old_cache()
     logging.info("Cache cleaned")
 
 @tasks.loop(hours=24)
 async def check_inactive_members():
-    """Cek member tidak aktif setiap 24 jam"""
     try:
         for guild in bot.guilds:
             inactive_members = activity_tracker.get_inactive_members(guild, days_threshold=3)
             
             for member, days_inactive in inactive_members:
                 try:
-                    # Send DM to member
                     await member.send(
                         f"👋 Hai {member.mention}, Anda sudah tidak aktif "
                         f"selama {days_inactive} hari di server **{guild.name}**!\n\n"
                         f"💬 Ayo kembali berkontribusi di server!"
                     )
                     
-                    # Send log to webhook
                     last_active = activity_tracker.last_activity[member.id]
                     await webhook_logger.send_log(
                         f"⚪ {member.display_name} tidak aktif selama {days_inactive} hari. "
@@ -310,8 +302,8 @@ async def check_inactive_members():
     except Exception as e:
         logging.error(f"Error in inactive members check: {e}")
 
-# ✅ PERBAIKAN: GANTI '-' MENJADI '=' DI BARIS INI
-@tasks.loop(time=datetime.time(hour=18, minute=0))  # Every day at 18:00
+# ✅ FIXED: Use 'time' directly from datetime
+@tasks.loop(time=time(hour=18, minute=0))  # Every day at 18:00
 async def friday_reminder():
     """Kirim reminder setiap Jumat jam 18:00"""
     if datetime.now().weekday() == 4:  # 4 = Jumat
@@ -323,28 +315,23 @@ async def friday_reminder():
             )
             
             for guild in bot.guilds:
-                # Find a public channel to send a message.
                 for channel in guild.text_channels:
                     if channel.permissions_for(guild.me).send_messages:
                         try:
                             await channel.send(message)
                             logging.info(f"Friday reminder sent to {channel.name} in {guild.name}")
-                            break  # Send once per server only
+                            break
                         except Exception as e:
                             logging.error(f"Failed to send reminder to {channel.name}: {e}")
                             
         except Exception as e:
             logging.error(f"Error in Friday reminder: {e}")
-            
+
 # 🎯 EVENT HANDLERS
 @bot.event
 async def on_member_join(member: discord.Member):
-    """Kirim pesan welcome ketika user join server"""
     try:
-        # Update activity tracker
         activity_tracker.update_activity(member.id)
-        
-        # Find channel for send welcome
         channel = None
         for ch in member.guild.text_channels:
             if ch.permissions_for(member.guild.me).send_messages:
@@ -354,10 +341,7 @@ async def on_member_join(member: discord.Member):
         if channel:
             welcome_message = f"🎉 Selamat datang di server **{member.guild.name}** {member.display_name}! Semoga betah ya!"
             await channel.send(welcome_message)
-            
-            # Send log to webhook
             await webhook_logger.send_log(f"🟢 {member.display_name} bergabung ke server")
-            
             logging.info(f"Welcome message sent for {member.display_name}")
             
     except Exception as e:
@@ -365,9 +349,7 @@ async def on_member_join(member: discord.Member):
 
 @bot.event
 async def on_member_remove(member: discord.Member):
-    """Kirim pesan ketika user leave server"""
     try:
-        # Find channel for send goodbye
         channel = None
         for ch in member.guild.text_channels:
             if ch.permissions_for(member.guild.me).send_messages:
@@ -377,10 +359,7 @@ async def on_member_remove(member: discord.Member):
         if channel:
             goodbye_message = f"👋 {member.display_name} meninggalkan server! Semoga sukses di mana pun!"
             await channel.send(goodbye_message)
-            
-            # Send log to webhook
             await webhook_logger.send_log(f"🔴 {member.display_name} meninggalkan server")
-            
             logging.info(f"Goodbye message sent for {member.display_name}")
             
     except Exception as e:
@@ -388,14 +367,11 @@ async def on_member_remove(member: discord.Member):
 
 @bot.event
 async def on_message(message: discord.Message):
-    """Handle incoming messages dengan activity tracking"""
     if message.author == bot.user:
         return
 
-    # Update activity tracker for all messages
     activity_tracker.update_activity(message.author.id)
 
-    # Filter forbidden words
     CARIAMAN_KEYWORDS = ["prabowo", "jokowi", "megawati", "sukarno", "luhut", "puan"]
     TOXIC_KEYWORDS = ["kontol", "memek", "titit", "mmk", "jembut", "bangsat", "ngentod", "peler"]
     
@@ -409,7 +385,6 @@ async def on_message(message: discord.Message):
             pass
         return
 
-    # Handle AI requests if bot in mention
     if bot.user.mentioned_in(message) and not message.mention_everyone:
         user_prompt = message.content.replace(f"<@{bot.user.id}>", "").replace(f"<@!{bot.user.id}>", "").strip()
         
@@ -419,7 +394,6 @@ async def on_message(message: discord.Message):
             )
             return
 
-        # Check rate limiting with concurrent limit
         can_request, error_msg = await rate_limiter.can_use_ai(message.author.id)
         if not can_request:
             await message.channel.send(error_msg)
@@ -427,7 +401,6 @@ async def on_message(message: discord.Message):
 
         await message.channel.typing()
         
-        # Groq Not Available
         if not groq_service or not GROQ_API_KEY:
             await message.channel.send(
                 f"{message.author.mention} 🤖 Maaf, saat ini Anda tidak bisa menggunakan AI. Silahkan menghubungi developer - Jundi Lesana @jonjon1227"
@@ -435,10 +408,7 @@ async def on_message(message: discord.Message):
             return
 
         try:
-            # Start AI request tracking
             await rate_limiter.start_ai_request(message.author.id)
-            
-            # Get response from Groq
             reply = await groq_service.get_response(user_prompt, message.author.id)
             
             if reply:
@@ -454,7 +424,6 @@ async def on_message(message: discord.Message):
                 f"{message.author.mention} 🤖 Maaf, terjadi error. Coba lagi nanti."
             )
         finally:
-            # End AI request tracking
             await rate_limiter.end_ai_request()
 
         return
@@ -463,20 +432,17 @@ async def on_message(message: discord.Message):
 
 @bot.event
 async def on_presence_update(before: discord.Member, after: discord.Member):
-    """Update activity ketika user online/ubah status"""
     if after.status != discord.Status.offline:
         activity_tracker.update_activity(after.id)
 
 @bot.event
 async def on_voice_state_update(member: discord.Member, before: discord.VoiceState, after: discord.VoiceState):
-    """Update activity ketika user join voice channel"""
     if after.channel is not None:
         activity_tracker.update_activity(member.id)
 
 # 🎮 BOT COMMANDS
 @bot.command()
 async def ping(ctx: commands.Context):
-    """Cek status bot"""
     latency = round(bot.latency * 1000)
     daily_usage = rate_limiter.user_daily_usage.get(ctx.author.id, 0)
     active_requests = rate_limiter.active_ai_requests
@@ -492,7 +458,6 @@ async def ping(ctx: commands.Context):
 
 @bot.command()
 async def usage(ctx: commands.Context):
-    """Cek usage stats"""
     daily_usage = rate_limiter.user_daily_usage.get(ctx.author.id, 0)
     remaining = 30 - daily_usage
     
@@ -506,7 +471,6 @@ async def usage(ctx: commands.Context):
 @bot.command()
 @commands.has_permissions(administrator=True)
 async def reset_limits(ctx: commands.Context, user: discord.Member = None):
-    """Reset limits (admin only)"""
     if user:
         rate_limiter.user_daily_usage.pop(user.id, None)
         rate_limiter.user_cooldowns.pop(user.id, None)
@@ -518,7 +482,6 @@ async def reset_limits(ctx: commands.Context, user: discord.Member = None):
 @bot.command()
 @commands.has_permissions(administrator=True)
 async def check_inactive(ctx: commands.Context):
-    """Manual check inactive members (admin only)"""
     inactive_members = activity_tracker.get_inactive_members(ctx.guild, days_threshold=3)
     
     if not inactive_members:
@@ -535,23 +498,19 @@ async def on_ready():
     print(f"🌐 Connected to {len(bot.guilds)} servers")
     logging.info(f"Bot siap dengan PID: {os.getpid()}")
     
-    # Start web server untuk Railway
     keep_alive()
     print("🌐 Web server started for Railway deployment")
     
-    # Initialize the activity tracker with the current time
     for guild in bot.guilds:
         for member in guild.members:
             if not member.bot:
                 activity_tracker.update_activity(member.id)
     
-    # Start background tasks
     reset_daily_task.start()
     clean_cache_task.start()
     check_inactive_members.start()
     friday_reminder.start()
     
-    # Set bot status
     await bot.change_presence(
         activity=discord.Activity(
             type=discord.ActivityType.listening, 
@@ -560,18 +519,13 @@ async def on_ready():
     )
 
 async def main():
-    """Main function dengan error handling"""
     try:
-        # Start web server for Railway
         keep_alive()
         print("🚀 Starting Techfour Discord Bot...")
-        
-        # Start Discord bot
         await bot.start(DISCORD_TOKEN)
     except Exception as e:
         logging.exception(f"Bot crashed: {e}")
     finally:
-        # Cleanup resources
         if groq_service:
             await groq_service.close_session()
         if webhook_logger:
