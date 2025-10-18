@@ -43,7 +43,7 @@ logging.info("=== Bot dimulai fresh ===")
 load_dotenv()
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # Webhook untuk log channel
+WEBHOOK_URL = os.getenv("WEBHOOK_URL") 
 
 if not DISCORD_TOKEN:
     raise ValueError("❌ Pastikan DISCORD_TOKEN sudah diisi di file .env")
@@ -216,7 +216,7 @@ class GroqAIService:
                     "messages": [
                         {
                             "role": "system", 
-                        "content": (
+                        "content": 
     "Kamu adalah Techfour, asisten AI resmi untuk kelas Teknik Informatika 01TPLE004. "
     "Kamu hanya boleh menggunakan informasi dari DATA RESMI berikut:\n\n"
     
@@ -235,7 +235,7 @@ class GroqAIService:
     "5. JANGAN PERNAH MENGARANG, MENEBAK, ATAU MEMBERI CONTOH FIKTIF.\n"
     "6. Gunakan bahasa Indonesia santai, seperti teman sekelas (pakai 'kamu', bukan 'Anda').\n"
     "7. Jika ditanya tanggal/hari, selalu asumsikan hari ini adalah hari yang relevan dengan konteks (misal: Jumat sebelum deadline).\n"
-)},
+},
                         {"role": "user", "content": user_prompt}
                     ],
                     "max_tokens": 150,
@@ -320,25 +320,24 @@ async def check_inactive_members():
     except Exception as e:
         logging.error(f"Error in inactive members check: {e}")
 
-# ✅ FIXED: FRIDAY REMINDER — TEPAK JUMAT 18:00 WIB
+# ✅ FIXED: FRIDAY REMINDER 18:00 WIB
 WIB = timezone(timedelta(hours=7))  # Jakarta = UTC+7
 
 @tasks.loop(time=time(hour=11, minute=0))  # 11:00 UTC = 18:00 WIB
 async def friday_reminder():
-    # Dapatkan waktu saat ini dalam UTC dan WIB
     now_utc = datetime.now(timezone.utc)
     now_wib = now_utc.astimezone(WIB)
     
     # Log untuk verifikasi
     logging.info(f"[FRIDAY REMINDER] Triggered at UTC: {now_utc.strftime('%Y-%m-%d %H:%M')} | WIB: {now_wib.strftime('%A, %Y-%m-%d %H:%M')}")
     
-    # Cek apakah hari ini JUMAT di WIB
+# Check if today is FRIDAY in WIB
     if now_wib.weekday() == 4:  # 4 = Jumat (Senin=0, ..., Jumat=4)
         try:
             message = (
                 "Hai @everyone jangan lupa tugas E-learning, tulis tangan, dan lain "
                 "sebagainya dikerjakan yh, karena besok jam 07:40 kita masuk kelas, "
-                "persiapkan dirimu untuk hari esok :)"
+                "persiapkan dirimu untuk hari esok 😊"
             )
             
             for guild in bot.guilds:
