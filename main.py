@@ -17,7 +17,6 @@ app = Flask('')
 @app.route('/')
 def home():
     return "🤖 Techfour Bot is Alive! Powered by Groq AI"
-
 def run_webserver():
     port = int(os.environ.get("PORT", 8080))
     # disable reloader to avoid double-process issues on Railway
