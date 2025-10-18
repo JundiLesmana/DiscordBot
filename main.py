@@ -302,11 +302,20 @@ async def check_inactive_members():
     except Exception as e:
         logging.error(f"Error in inactive members check: {e}")
 
-# ✅ FIXED: Use 'time' directly from datetime
-@tasks.loop(time=time(hour=18, minute=0))  # Every day at 18:00
+# ✅ FIXED: FRIDAY REMINDER — TEPAK JUMAT 18:00 WIB
+WIB = timezone(timedelta(hours=7))  # Jakarta = UTC+7
+
+@tasks.loop(time=time(hour=11, minute=0))  # 11:00 UTC = 18:00 WIB
 async def friday_reminder():
-    """Kirim reminder setiap Jumat jam 18:00"""
-    if datetime.now().weekday() == 4:  # 4 = Jumat
+    # Dapatkan waktu saat ini dalam UTC dan WIB
+    now_utc = datetime.now(timezone.utc)
+    now_wib = now_utc.astimezone(WIB)
+    
+    # Log untuk verifikasi
+    logging.info(f"[FRIDAY REMINDER] Triggered at UTC: {now_utc.strftime('%Y-%m-%d %H:%M')} | WIB: {now_wib.strftime('%A, %Y-%m-%d %H:%M')}")
+    
+    # Cek apakah hari ini JUMAT di WIB
+    if now_wib.weekday() == 4:  # 4 = Jumat (Senin=0, ..., Jumat=4)
         try:
             message = (
                 "Hai @everyone jangan lupa tugas E-learning, tulis tangan, dan lain "
@@ -319,13 +328,15 @@ async def friday_reminder():
                     if channel.permissions_for(guild.me).send_messages:
                         try:
                             await channel.send(message)
-                            logging.info(f"Friday reminder sent to {channel.name} in {guild.name}")
+                            logging.info(f"✅ Friday reminder sent to {channel.name} in {guild.name} at {now_wib.strftime('%Y-%m-%d %H:%M WIB')}")
                             break
                         except Exception as e:
-                            logging.error(f"Failed to send reminder to {channel.name}: {e}")
-                            
+                            logging.error(f"❌ Failed to send reminder to {channel.name}: {e}")
         except Exception as e:
-            logging.error(f"Error in Friday reminder: {e}")
+            logging.error(f"❌ Error in Friday reminder: {e}")
+    else:
+        logging.info(f"⏭️ Bukan hari Jumat di WIB ({now_wib.strftime('%A')}), lewati pengiriman.")
+
 
 # 🎯 EVENT HANDLERS
 @bot.event
