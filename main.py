@@ -19,7 +19,6 @@ def home():
     return "🤖 Techfour Bot is Alive! Powered by Groq AI"
 def run_webserver():
     port = int(os.environ.get("PORT", 8080))
-    # disable reloader to avoid double-process issues on Railway
     app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
 
 def keep_alive():
@@ -222,7 +221,7 @@ class GroqAIService:
     
     "=== DATA RESMI (UPDATE: Oktober 2025) ===\n"
     "- Pembuat kamu: Mahasiswa Universitas Pamulang kelas TPLE104\n"
-    "- Jadwal Kelas: Sabtu, pukul 07:40-15:20 WIB, Gedung A- UNPAM VIKTOR Lt1 Ruang 104 C\n"
+    "- Jadwal Kelas: Sabtu, pukul 07:40-15:20 WIB, Gedung A- UNPAM VIKTOR Lt1 Ruang 104\n"
     "- Server Discord: Techfour\n"
     "- Aturan Server: Dilarang bahas politik, SARA, dan konten toxic\n"
     "========================================\n\n"
