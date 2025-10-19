@@ -57,6 +57,7 @@ intents.presences = True  # tracking activity member
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 # 📈 RATE LIMITING & TRACKING SYSTEM
+
 class RateLimiter:
     def __init__(self):
         self.user_cooldowns: Dict[int, float] = {}
@@ -71,37 +72,38 @@ class RateLimiter:
         self.last_reset_time = py_time.time()
         logging.info("Daily limits reset")
     
-    async def can_use_ai(self, user_id: int) -> tuple[bool, Optional[str]]:
-        """Cek apakah user bisa menggunakan AI dengan concurrent limit"""
+    def get_daily_limit(self, is_admin: bool) -> int:
+        return 50 if is_admin else 30
+    
+    async def can_use_ai(self, user_id: int, is_admin: bool) -> tuple[bool, Optional[str]]:
         current_time = py_time.time()
+        daily_limit = self.get_daily_limit(is_admin)
         
         # Cek concurrent requests (maximal 2)
         async with self.ai_request_lock:
             if self.active_ai_requests >= 2:
                 return False, "⏳ Sedang ada 2 orang menggunakan AI. Tunggu 5 detik ya!"
             
-            # Cek cooldown 1 minutes
+            # Cek cooldown 15 detik (kamu ubah jadi 15, oke!)
             if user_id in self.user_cooldowns:
                 time_since_last = current_time - self.user_cooldowns[user_id]
                 if time_since_last < 15:
                     return False, f"⏳ Tunggu {int(15 - time_since_last)} detik lagi sebelum menggunakan AI."
             
-            # Cek daily limit 30 requests
+            # Cek daily limit
             daily_count = self.user_daily_usage.get(user_id, 0)
-            if daily_count >= 30:
-                return False, f"🚫 Limit harianmu sudah habis. Reset dalam 24 jam."
+            if daily_count >= daily_limit:
+                return False, f"🚫 Limit harianmu sudah habis ({daily_count}/{daily_limit}). Reset dalam 24 jam."
             
             return True, None
     
     async def start_ai_request(self, user_id: int):
-        """Mulai AI request dan update tracking"""
         async with self.ai_request_lock:
             self.active_ai_requests += 1
         self.user_cooldowns[user_id] = py_time.time()
         self.user_daily_usage[user_id] = self.user_daily_usage.get(user_id, 0) + 1
     
     async def end_ai_request(self):
-        """Selesai AI request"""
         async with self.ai_request_lock:
             self.active_ai_requests -= 1
 
@@ -109,6 +111,7 @@ rate_limiter = RateLimiter()
 
 # 🔄 ACTIVITY TRACKING SYSTEM
 class ActivityTracker:
+
     def __init__(self):
         self.last_activity: Dict[int, datetime] = {}
     
@@ -140,6 +143,19 @@ class ActivityTracker:
 
 activity_tracker = ActivityTracker()
 
+def is_admin(member: discord.Member) -> bool:
+    """Cek apakah member adalah admin berdasarkan role atau owner server"""
+
+    if member.guild.owner_id == member.id:
+        return True
+    
+    admin_roles = ["Admin", "Administrator", "Owner", "Moderator"]
+    
+    for role in member.roles:
+        if role.name in admin_roles:
+            return True
+    
+    return False
 # 🔗 WEBHOOK LOGGER
 class WebhookLogger:
     def __init__(self, webhook_url: str):
@@ -426,7 +442,10 @@ async def on_message(message: discord.Message):
             )
             return
 
-        can_request, error_msg = await rate_limiter.can_use_ai(message.author.id)
+        user_is_admin = is_admin(message.author)
+        
+        can_request, error_msg = await rate_limiter.can_use_ai(message.author.id, user_is_admin)
+        
         if not can_request:
             await message.channel.send(error_msg)
             return
@@ -474,27 +493,15 @@ async def on_voice_state_update(member: discord.Member, before: discord.VoiceSta
 
 # 🎮 BOT COMMANDS
 @bot.command()
-async def ping(ctx: commands.Context):
-    latency = round(bot.latency * 1000)
-    daily_usage = rate_limiter.user_daily_usage.get(ctx.author.id, 0)
-    active_requests = rate_limiter.active_ai_requests
-    
-    embed = discord.Embed(title="🏓 Pong!", color=discord.Color.green())
-    embed.add_field(name="Latency", value=f"{latency}ms", inline=True)
-    embed.add_field(name="Daily Usage", value=f"{daily_usage}/30", inline=True)
-    embed.add_field(name="Active AI Requests", value=f"{active_requests}/2", inline=True)
-    embed.add_field(name="AI Status", value="✅ Active" if groq_service else "❌ Offline", inline=True)
-    embed.add_field(name="Server Count", value=f"{len(bot.guilds)}", inline=True)
-
-    await ctx.send(embed=embed)
-
-@bot.command()
 async def usage(ctx: commands.Context):
+    is_user_admin = is_admin(ctx.author)
+    daily_limit = 50 if is_user_admin else 30
     daily_usage = rate_limiter.user_daily_usage.get(ctx.author.id, 0)
-    remaining = 30 - daily_usage
+    remaining = daily_limit - daily_usage
     
     embed = discord.Embed(title="📊 Usage Stats", color=discord.Color.blue())
     embed.add_field(name="Used Today", value=f"{daily_usage} prompts", inline=True)
+    embed.add_field(name="Limit", value=f"{daily_limit} prompts", inline=True)
     embed.add_field(name="Remaining", value=f"{remaining} prompts", inline=True)
     embed.add_field(name="Reset In", value="24 hours", inline=True)
     
