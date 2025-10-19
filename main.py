@@ -233,7 +233,7 @@ class GroqAIService:
     "4. JIKA PERTANYAAN TIDAK ADA DI DATA RESMI DI ATAS, katakan: \"Maaf, saya tidak tahu informasi itu.\"\n"
     "5. JANGAN PERNAH MENGARANG, MENEBAK, ATAU MEMBERI CONTOH FIKTIF.\n"
     "6. Gunakan bahasa Indonesia santai, seperti teman sekelas (pakai 'kamu', bukan 'Anda').\n"
-    "7. Jika ditanya tanggal/hari, selalu asumsikan hari ini adalah hari yang relevan dengan konteks (misal: Jumat sebelum deadline).\n"
+    "7. Jika ditanya tanggal/hari, selalu asumsikan hari ini adalah hari yang relevan dan valid.\n"
 },
                         {"role": "user", "content": user_prompt}
                     ],
