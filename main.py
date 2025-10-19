@@ -83,8 +83,8 @@ class RateLimiter:
             # Cek cooldown 1 minutes
             if user_id in self.user_cooldowns:
                 time_since_last = current_time - self.user_cooldowns[user_id]
-                if time_since_last < 60:
-                    return False, f"⏳ Tunggu {int(60 - time_since_last)} detik lagi sebelum menggunakan AI."
+                if time_since_last < 15:
+                    return False, f"⏳ Tunggu {int(15 - time_since_last)} detik lagi sebelum menggunakan AI."
             
             # Cek daily limit 30 requests
             daily_count = self.user_daily_usage.get(user_id, 0)
