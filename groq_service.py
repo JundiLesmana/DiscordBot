@@ -72,7 +72,8 @@ Ingat: Jadilah asisten yang HELPFUL, SMART, dan RELEVAN untuk semua pertanyaan!"
                 return cached_data['response']
         
         try:
-            chat_completion = self.client.chat.completions.create(
+            chat_completion = await asyncio.to_thread(
+                self.client.chat.completions.create,
                 messages=[
                     {"role": "system", "content": self._get_smart_prompt()},
                     {"role": "user", "content": user_prompt}

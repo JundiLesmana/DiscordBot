@@ -316,9 +316,8 @@ async def on_message(message: discord.Message):
                 
         except Exception as e:
             logging.exception(f"Error processing AI request: {e}")
-            await message.channel.send(
-                f"{message.author.mention} 🤖 Maaf, terjadi error. silahkan hubungi developer @jonjon1227 ."
-            )
+            await message.channel.send(f"{message.author.mention}🤖 Maaf, terjadi error. silahkan hubungi developer @jonjon1227 .")
+            
         finally:
             await rate_limiter.end_ai_request()
 
