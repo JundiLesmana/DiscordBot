@@ -1,5 +1,6 @@
 import os
 import time
+import asyncio
 from groq import Groq
 
 class GroqService:
@@ -72,13 +73,14 @@ Ingat: Jadilah asisten yang HELPFUL, SMART, dan RELEVAN untuk semua pertanyaan!"
                 return cached_data['response']
         
         try:
+            # Jalankan Groq di thread karena library sync
             chat_completion = await asyncio.to_thread(
                 self.client.chat.completions.create,
                 messages=[
                     {"role": "system", "content": self._get_smart_prompt()},
                     {"role": "user", "content": user_prompt}
                 ],
-                model="llama-3.1-8b-instant",
+                model="llama-3.1-8b-instant",  
                 temperature=0.7,
                 max_tokens=2000,
                 timeout=15
@@ -102,5 +104,5 @@ Ingat: Jadilah asisten yang HELPFUL, SMART, dan RELEVAN untuk semua pertanyaan!"
         for key in expired_keys:
             del self.response_cache[key]
 
-# Buat instance global
+
 groq_service = GroqService()
