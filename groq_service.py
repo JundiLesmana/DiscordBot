@@ -78,7 +78,7 @@ Ingat: Jadilah asisten yang HELPFUL, SMART, dan RELEVAN untuk semua pertanyaan!"
                     {"role": "system", "content": self._get_smart_prompt()},
                     {"role": "user", "content": user_prompt}
                 ],
-                model="llama-3.1-70b-versatile",
+                model="llama-3.1-8b-instant",
                 temperature=0.7,
                 max_tokens=2000,
                 timeout=15
