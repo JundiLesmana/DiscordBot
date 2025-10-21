@@ -1,6 +1,5 @@
 import discord
 from discord.ext import commands, tasks
-from deepseek_service import deepseek_service
 import logging
 import os
 import time as py_time 
@@ -11,6 +10,8 @@ import aiohttp
 from flask import Flask
 from threading import Thread
 from typing import Dict, List, Optional
+from deepseek_service import DeepSeekService
+deepseek_service = DeepSeekService()
 
 # 🚀 WEB SERVER FOR RAILWAY
 app = Flask('')
@@ -392,7 +393,7 @@ async def check_inactive_members():
                     
     except Exception as e:
         logging.error(f"Error in inactive members check: {e}")
-        
+
 # 🚀 BOT STARTUP
 @bot.event
 async def on_ready():

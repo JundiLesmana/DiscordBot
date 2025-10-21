@@ -9,7 +9,7 @@ class DeepSeekService:
         self.api_key = os.getenv("DEEPSEEK_API_KEY")
         if not self.api_key:
             raise ValueError("❌ DEEPSEEK_API_KEY harus diisi di .env")
-        self.base_url = "https://api.deepseek.com/v1/chat/completions"  
+        self.base_url = "https://api.deepseek.com/v1/chat/completions"  # ✅ FIX: HAPUS SPASI!
         self.response_cache: dict = {}
         self.CACHE_DURATION = 300  # 5 menit
         
@@ -127,3 +127,5 @@ Ingat: Jadilah asisten yang HELPFUL, SMART, dan RELEVAN untuk semua pertanyaan!"
         ]
         for key in expired_keys:
             del self.response_cache[key]
+
+deepseek_service = DeepSeekService()
