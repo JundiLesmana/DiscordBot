@@ -3,7 +3,7 @@ from discord.ext import commands, tasks
 from deepseek_service import deepseek_service
 import logging
 import os
-import time as py_time  # renamed to avoid conflict with datetime.time
+import time as py_time 
 import asyncio
 from datetime import datetime, timedelta, time, timezone 
 from dotenv import load_dotenv
@@ -190,178 +190,6 @@ class WebhookLogger:
 
 webhook_logger = WebhookLogger(WEBHOOK_URL)
 
-#DEEPSEEK SERVICE
-class DeepSeekService:
-    def __init__(self):
-        self.api_key = os.getenv("DEEPSEEK_API_KEY")
-        if not self.api_key:
-            raise ValueError("❌ DEEPSEEK_API_KEY harus diisi di .env")
-        self.base_url = "https://api.deepseek.com/v1/chat/completions"
-        self.response_cache: Dict[str, dict] = {}
-        self.CACHE_DURATION = 300  # 5 menit
-        
-    async def get_response(self, user_prompt: str, user_id: int) -> Optional[str]:
-        """Dapatkan response dari DeepSeek AI dengan caching"""
-        # Check cache
-        cache_key = f"{user_id}_{user_prompt[:50]}"
-        if cache_key in self.response_cache:
-            cached_data = self.response_cache[cache_key]
-            if py_time.time() - cached_data['timestamp'] < self.CACHE_DURATION:
-                return cached_data['response']
-        
-        try:
-            async with aiohttp.ClientSession() as session:
-                headers = {
-                        "Content-Type": "application/json",
-                        "Authorization": f"Bearer {self.api_key}"
-                        }                
-                async with session.post(
-                    self.base_url,
-                    headers=headers,
-                    json={
-                        "model": "deepseek-chat",  # 🎯 MODEL DEEPSEEK
-                        "messages": [
-                            {
-                                "role": "system", 
-                                "content": self._get_smart_prompt()
-                            },
-                            {"role": "user", "content": user_prompt}
-                        ],
-                        "max_tokens": 2000,  
-                        "temperature": 0.7,
-                        "stream": False
-                    },
-                    timeout=15
-                ) as response:
-                    
-                    if response.status == 200:
-                        data = await response.json()
-                        reply = data["choices"][0]["message"]["content"].strip()
-                        
-                        # Save to cache
-                        self.response_cache[cache_key] = {
-                            'response': reply,
-                            'timestamp': py_time.time()
-                        }
-                        
-                        return reply
-                    else:
-                        error_text = await response.text()
-                        logging.error(f"DeepSeek API error: {response.status} - {error_text}")
-                        return None
-                        
-        except asyncio.TimeoutError:
-            logging.error("DeepSeek API timeout")
-            return None
-        except Exception as e:
-            logging.error(f"DeepSeek error: {e}")
-            return None
-    
-    def _get_smart_prompt(self) -> str:
-        """System prompt yang membuat AI lebih pintar dan relevan"""
-        return """Anda adalah Techfour - asisten AI resmi untuk kelas Teknik Informatika 01TPLE004.
-
-📚 **DATA RESMI KELAS (UPDATE: Oktober 2025):**
-- **Pembuat**: Mahasiswa Universitas Pamulang kelas 01TPLE104
-- **Jadwal Kelas**: Sabtu, 07:40-15:20 WIB, Gedung A-UNPAM VIKTOR Lt1 Ruang 104
-- **Server Discord**: Techfour
-- **Aturan Server**: Dilarang bahas politik, SARA, dan konten toxic
-
-🗓️ **JADWAL RESMI:**
-
-**E-LEARNING (20-26 OKTOBER):**
-- Logika Informatika - Pertemuan 10
-- Fisika Dasar - Pertemuan 10  
-- Pendidikan Agama - Pertemuan 7
-- Pendidikan Pancasila - Pertemuan 7
-
-**KELAS OFFLINE (20-26 OKTOBER):**
-- Algoritma & Pemrograman - Pertemuan 10
-- Kalkulus 1 - Pertemuan 10
-- Basic English - Pertemuan 7
-- Pengantar Teknologi - Pertemuan 7
-
-**UJIAN ONLINE (27 OKTOBER - 01 NOVEMBER):**
-- Pendidikan Pancasila, Pendidikan Agama, Logika Informatika, Fisika Dasar
-
-**UJIAN OFFLINE (01 NOVEMBER):**
-- Kalkulus, Algoritma & Pemrograman, Basic English, Pengantar Teknologi
-
-🎯 **ATURAN UTAMA:**
-1. **JIKA PERTANYAAN TERKAIT:** UJIAN, UTS, UAS → BERIKAN DATA RESMI Jadwal Ujian
-2. **JIKA PERTANYAAN TERKAIT:** E-LEARNING, MENTARI, KELAS ONLINE → BERIKAN DATA RESMI Jadwal E-Learning
-3. **JIKA PERTANYAAN TERKAIT:** JADWAL & PERTEMUAN → BERIKAN DATA RESMI JADWAL
-4. **JIKA PERIODE 27 OKTOBER - 01 NOVEMBER** → ARAHKAN KE JADWAL UJIAN
-5. **UNTUK PERTANYAAN AKADEMIK:** Kalkulus, Matematika, Fisika → BERIKAN RUMUS & PERHITUNGAN AKURAT
-6. **UNTUK BAHASA INGGRIS** → BERIKAN JAWABAN TEPAT BERDASARKAN SUMBER RESMI
-7. **UNTUK PROGRAMMING** → BERIKAN CONTOH CODE YANG BENAR DAN WORKING
-
-💡 **UNTUK SEMUA PERTANYAAN LAIN:**
-- JAWAB dengan RELEVAN dan TEPAT berdasarkan pengetahuan umum
-- Berikan penjelasan yang JELAS dan BERMANFAAT
-- Jika tidak tahu informasi spesifik, berikan panduan umum atau arahkan ke sumber yang tepat
-- Gunakan bahasa Indonesia santai seperti teman sekelas
-- Prioritaskan jawaban yang praktis dan aplikatif
-
-📝 **FORMAT RESPONS:**
-- Gunakan poin-poin untuk informasi penting
-- **Bold** untuk istilah teknis
-- Code blocks untuk programming examples
-- Struktur yang rapi dan mudah dibaca
-
-Ingat: Jadilah asisten yang HELPFUL, SMART, dan RELEVAN untuk semua pertanyaan!"""
-    
-    def clean_old_cache(self):
-        """Bersihkan cache yang sudah expired"""
-        current_time = py_time.time()
-        expired_keys = [
-            key for key, data in self.response_cache.items() 
-            if current_time - data['timestamp'] > self.CACHE_DURATION
-        ]
-        for key in expired_keys:
-            del self.response_cache[key]
-
-# Global instance
-deepseek_service = DeepSeekService()
-
-@tasks.loop(minutes=5)
-async def clean_cache_task():
-    # Bersihkan cache DeepSeek
-    deepseek_service.clean_old_cache()
-    logging.info("DeepSeek cache cleaned")
-
-@tasks.loop(hours=24)
-async def reset_daily_task():
-    rate_limiter.reset_daily_limits()
-async def check_inactive_members():
-    try:
-        for guild in bot.guilds:
-            inactive_members = activity_tracker.get_inactive_members(guild, days_threshold=3)
-            
-            for member, days_inactive in inactive_members:
-                try:
-                    await member.send(
-                        f"👋 Hai {member.mention}, Anda sudah tidak aktif "
-                        f"selama {days_inactive} hari di server **{guild.name}**!\n\n"
-                        f"💬 Ayo kembali berkontribusi di server!"
-                    )
-                    
-                    last_active = activity_tracker.last_activity[member.id]
-                    await webhook_logger.send_log(
-                        f"⚪ {member.display_name} tidak aktif selama {days_inactive} hari. "
-                        f"Terakhir aktif: {last_active.strftime('%Y-%m-%d %H:%M')}"
-                    )
-                    
-                    logging.info(f"Notified inactive member: {member.name} ({days_inactive} days)")
-                    
-                except discord.Forbidden:
-                    logging.warning(f"Cannot DM inactive member: {member.name}")
-                except Exception as e:
-                    logging.error(f"Error handling inactive member {member.name}: {e}")
-                    
-    except Exception as e:
-        logging.error(f"Error in inactive members check: {e}")
-
 # ✅ FIXED: FRIDAY REMINDER 18:00 WIB
 WIB = timezone(timedelta(hours=7))  # Jakarta = UTC+7
 
@@ -535,18 +363,36 @@ async def reset_limits(ctx: commands.Context, user: discord.Member = None):
         rate_limiter.reset_daily_limits()
         await ctx.send("✅ Semua daily limits telah direset!")
 
-@bot.command()
-@commands.has_permissions(administrator=True)
-async def check_inactive(ctx: commands.Context):
-    inactive_members = activity_tracker.get_inactive_members(ctx.guild, days_threshold=3)
-    
-    if not inactive_members:
-        await ctx.send("✅ Tidak ada member yang tidak aktif selama 3 hari.")
-        return
-    
-    inactive_list = "\n".join([f"• {member.display_name} ({days} hari)" for member, days in inactive_members[:10]])
-    await ctx.send(f"**Member Tidak Aktif (3+ hari):**\n{inactive_list}")
-
+@tasks.loop(hours=24)
+async def check_inactive_members():
+    try:
+        for guild in bot.guilds:
+            inactive_members = activity_tracker.get_inactive_members(guild, days_threshold=3)
+            
+            for member, days_inactive in inactive_members:
+                try:
+                    await member.send(
+                        f"👋 Hai {member.mention}, Anda sudah tidak aktif "
+                        f"selama {days_inactive} hari di server **{guild.name}**!\n\n"
+                        f"💬 Ayo kembali berkontribusi di server!"
+                    )
+                    
+                    last_active = activity_tracker.last_activity[member.id]
+                    await webhook_logger.send_log(
+                        f"⚪ {member.display_name} tidak aktif selama {days_inactive} hari. "
+                        f"Terakhir aktif: {last_active.strftime('%Y-%m-%d %H:%M')}"
+                    )
+                    
+                    logging.info(f"Notified inactive member: {member.name} ({days_inactive} days)")
+                    
+                except discord.Forbidden:
+                    logging.warning(f"Cannot DM inactive member: {member.name}")
+                except Exception as e:
+                    logging.error(f"Error handling inactive member {member.name}: {e}")
+                    
+    except Exception as e:
+        logging.error(f"Error in inactive members check: {e}")
+        
 # 🚀 BOT STARTUP
 @bot.event
 async def on_ready():
