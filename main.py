@@ -10,15 +10,14 @@ import aiohttp
 from flask import Flask
 from threading import Thread
 from typing import Dict, List, Optional
-from deepseek_service import DeepSeekService
-deepseek_service = DeepSeekService()
+from groq_service import groq_service
 
 # 🚀 WEB SERVER FOR RAILWAY
 app = Flask('')
 
 @app.route('/')
 def home():
-    return "🤖 Techfour Bot is Alive! Powered by Deepseek"
+    return "🤖 Techfour Bot is Alive! Powered by Groq"
 def run_webserver():
     port = int(os.environ.get("PORT", 8080))
     app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
@@ -306,19 +305,19 @@ async def on_message(message: discord.Message):
         try:
             await rate_limiter.start_ai_request(message.author.id)
             
-            reply = await deepseek_service.get_response(user_prompt, message.author.id)
+            reply = await groq_service.get_response(user_prompt, message.author.id)
             
             if reply:
                 await message.channel.send(reply)
             else:
                 await message.channel.send(
-                    f"{message.author.mention} 🤖 Maaf, DeepSeek sedang sibuk. Coba lagi sebentar ya!"
+                    f"{message.author.mention} 🤖 Maaf, AI Bot sedang sibuk. Coba lagi sebentar ya!"
                 )
                 
         except Exception as e:
             logging.exception(f"Error processing AI request: {e}")
             await message.channel.send(
-                f"{message.author.mention} 🤖 Maaf, terjadi error. Coba lagi nanti."
+                f"{message.author.mention} 🤖 Maaf, terjadi error. silahkan hubungi developer @jonjon1227 ."
             )
         finally:
             await rate_limiter.end_ai_request()
@@ -347,7 +346,7 @@ async def ping(ctx):
     embed.add_field(name="Latency", value=f"{latency}ms", inline=True)
     embed.add_field(name="Daily Usage", value=f"{daily_usage}/50", inline=True)
     embed.add_field(name="Active AI Requests", value=f"{active_requests}/2", inline=True)
-    embed.add_field(name="AI Provider", value="🤖 DeepSeek", inline=True)  # 🎯 UPDATE
+    embed.add_field(name="AI Provider", value="🤖 Groq + Llama 3.1", inline=True)
     embed.add_field(name="Status", value="✅ Unlimited & Smart", inline=True)  # 🎯 UPDATE
     
     await ctx.send(embed=embed)
