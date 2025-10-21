@@ -74,7 +74,7 @@ class RateLimiter:
         logging.info("Daily limits reset")
     
     def get_daily_limit(self, is_admin: bool) -> int:
-        return 50 if is_admin else 30
+        return 30 if is_admin else 15
     
     async def can_use_ai(self, user_id: int, is_admin: bool) -> tuple[bool, Optional[str]]:
         current_time = py_time.time()
@@ -306,7 +306,6 @@ async def on_message(message: discord.Message):
         try:
             await rate_limiter.start_ai_request(message.author.id)
             
-            # 🎯 GUNAKAN DEEPSEEK YANG BARU
             reply = await deepseek_service.get_response(user_prompt, message.author.id)
             
             if reply:
