@@ -10,6 +10,7 @@ import aiohttp
 from flask import Flask
 from threading import Thread
 from typing import Dict, List, Optional
+from deepseek_service import deepseek_service
 
 # 🚀 WEB SERVER FOR RAILWAY
 app = Flask('')
@@ -41,7 +42,6 @@ logging.info("=== Bot dimulai fresh ===")
 # 🔐 ENVIRONMENT VARIABLES
 load_dotenv()
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 WEBHOOK_URL = os.getenv("WEBHOOK_URL") 
 
 if not DISCORD_TOKEN:
@@ -190,27 +190,19 @@ class WebhookLogger:
 
 webhook_logger = WebhookLogger(WEBHOOK_URL)
 
-# 🤖 GROQ AI SERVICE
-class GroqAIService:
-    def __init__(self, api_key: str):
-        self.api_key = api_key
-        self.base_url = "https://api.groq.com/openai/v1/chat/completions"  # removed trailing spaces
-        self.session: Optional[aiohttp.ClientSession] = None
+#DEEPSEEK SERVICE
+class DeepSeekService:
+    def __init__(self):
+        self.api_key = os.getenv("DEEPSEEK_API_KEY")
+        if not self.api_key:
+            raise ValueError("❌ DEEPSEEK_API_KEY harus diisi di .env")
+        self.base_url = "https://api.deepseek.com/v1/chat/completions"
         self.response_cache: Dict[str, dict] = {}
         self.CACHE_DURATION = 300  # 5 menit
         
-    async def get_session(self):
-        if self.session is None:
-            self.session = aiohttp.ClientSession()
-        return self.session
-    
-    async def close_session(self):
-        if self.session:
-            await self.session.close()
-            self.session = None
-    
     async def get_response(self, user_prompt: str, user_id: int) -> Optional[str]:
-        """Dapatkan response dari Groq AI dengan caching"""
+        """Dapatkan response dari DeepSeek AI dengan caching"""
+        # Check cache
         cache_key = f"{user_id}_{user_prompt[:50]}"
         if cache_key in self.response_cache:
             cached_data = self.response_cache[cache_key]
@@ -218,97 +210,106 @@ class GroqAIService:
                 return cached_data['response']
         
         try:
-            session = await self.get_session()
-            
-            async with session.post(
-                url=self.base_url,
-headers={
-    "Authorization": f"Bearer {self.api_key}",
-    "Content-Type": "application/json"
-},
-json={
-    "model": "llama-3.1-8b-instant",
-    "messages": [
-        {
-            "role": "system", 
-            "content": 
-                "Kamu adalah Techfour, asisten AI resmi untuk kelas Teknik Informatika 01TPLE004. "
-                "Kamu hanya boleh menggunakan informasi dari DATA RESMI berikut:\n\n"
-                
-                "=== DATA RESMI (UPDATE: Oktober 2025) ===\n"
-                "- Pembuat kamu: Mahasiswa Universitas Pamulang kelas 01TPLE104\n"
-                "- Jadwal Kelas: Sabtu, pukul 07:40-15:20 WIB, Gedung A- UNPAM VIKTOR Lt1 Ruang 104\n"
-                "- Server Discord: Techfour\n"
-                "- Aturan Server: Dilarang bahas politik, SARA, dan konten toxic\n\n"
-                
-                "📅 JADWAL E-LEARNING (20-26 OKTOBER):\n"
-                "- Logika Informatika - Pertemuan 10\n"
-                "- Fisika Dasar - Pertemuan 10\n"
-                "- Pendidikan Agama - Pertemuan 7\n"
-                "- Pendidikan Pancasila - Pertemuan 7\n\n"
-                
-                "🏫 JADWAL OFFLINE (20-26 OKTOBER):\n"
-                "- Algoritma & Pemrograman - Pertemuan 10\n"
-                "- Kalkulus 1 - Pertemuan 10\n"
-                "- Basic English - Pertemuan 7\n"
-                "- Pengantar Teknologi - Pertemuan 7\n\n"
-                
-                "📝 JADWAL UJIAN ONLINE (27 OKTOBER - 01 NOVEMBER):\n"
-                "- Pendidikan Pancasila, Pendidikan Agama, Logika Informatika, Fisika Dasar\n\n"
-                
-                "✏️ JADWAL UJIAN OFFLINE (01 NOVEMBER):\n"
-                "- Kalkulus, Algoritma & Pemrograman, Basic English, Pengantar Teknologi\n"
-                "========================================\n\n"
-                
-                "ATURAN MUTLAK:\n"
-                "1. JIKA PERTANYAAN TERKAIT UJIAN,UTS,UAS BERIKAN DATA RESMI Jadwal Ujian Online dan Jadwal Ujian Offline.\n"
-                "2. JIKA PERTANYAAN TERKAIT E-LEARNING, MENTARI, KELAS ONLINE BERIKAN DATA RESMI Jadwal E-Learning.\n"
-                "3. JIKA PERTANYAAN TERKAIT JADWAL + PERTEMUAN BERIKAN DATA RESMI JADWAL E-LEARNING/OFFLINE.\n"
-                "4. JIKA PERIODE 27 OKTOBER - 01 NOVEMBER ARAHKAN KE JADWAL UJIAN.\n"
-                "5. JIKA PERTANYAAN TERKAIT KALKULUS,MATEMATIKA,FISIKA HARUS BERDASARKAN RUMUS DAN PERHITUNGAN YANG AKURAT.\n"
-                "6. JIKA PERTANYAAN TERKAIT BAHASA INGGRIS BERIKAN JAWABAN YANG TEPAT BERDASARKAN SUMBER RESMI.\n"
-                "7. JAWAB DENGAN TEPAT BERDASARKAN DATA ACTUAL DAN DARI SUMBER RESMI.\n"
-                "8. JIKA PERTANYAAN TIDAK ADA DI DATA RESMI DI ATAS, katakan: \"Maaf, saya tidak tahu informasi itu.\"\n"
-                "9. JANGAN PERNAH MENGARANG, MENEBAK, ATAU MEMBERI CONTOH FIKTIF.\n"
-                "10. Gunakan bahasa Indonesia santai, seperti teman sekelas (pakai 'kamu', bukan 'Anda').\n"
-                "11. Jika ditanya tanggal/hari, Jawab dengan valid dihari saat ini.\n\n"
-                
-                "FORMAT RESPONS:\n"
-                "- Prioritaskan poin-poin penting dahulu\n"
-                "- Gunakan bullet points yang ringkas\n"
-                "- Jika respons panjang, tawarkan ringkasan singkat\n"
-                "- Gunakan markdown untuk struktur yang rapat\n"
-                "- Break down complex topics menjadi multiple questions"
-        },
-        {"role": "user", "content": user_prompt}
-    ],
-    "max_tokens": 150,
-    "temperature": 0.7
-},
-                timeout=30
-            ) as response:
-                
-                if response.status != 200:
-                    error_detail = await response.text()
-                    logging.error(f"Groq API error: {response.status} - {error_detail}")
-                    return None
-                
-                data = await response.json()
-                reply = data["choices"][0]["message"]["content"].strip()
-                
-                self.response_cache[cache_key] = {
-                    'response': reply,
-                    'timestamp': py_time.time()
-                }
-                
-                return reply
-                
+            async with aiohttp.ClientSession() as session:
+                headers = {
+                        "Content-Type": "application/json",
+                        "Authorization": f"Bearer {self.api_key}"
+                        }                
+                async with session.post(
+                    self.base_url,
+                    headers=headers,
+                    json={
+                        "model": "deepseek-chat",  # 🎯 MODEL DEEPSEEK
+                        "messages": [
+                            {
+                                "role": "system", 
+                                "content": self._get_smart_prompt()
+                            },
+                            {"role": "user", "content": user_prompt}
+                        ],
+                        "max_tokens": 2000,  
+                        "temperature": 0.7,
+                        "stream": False
+                    },
+                    timeout=15
+                ) as response:
+                    
+                    if response.status == 200:
+                        data = await response.json()
+                        reply = data["choices"][0]["message"]["content"].strip()
+                        
+                        # Save to cache
+                        self.response_cache[cache_key] = {
+                            'response': reply,
+                            'timestamp': py_time.time()
+                        }
+                        
+                        return reply
+                    else:
+                        error_text = await response.text()
+                        logging.error(f"DeepSeek API error: {response.status} - {error_text}")
+                        return None
+                        
         except asyncio.TimeoutError:
-            logging.error("Groq API timeout")
+            logging.error("DeepSeek API timeout")
             return None
         except Exception as e:
-            logging.error(f"Groq API error: {e}")
+            logging.error(f"DeepSeek error: {e}")
             return None
+    
+    def _get_smart_prompt(self) -> str:
+        """System prompt yang membuat AI lebih pintar dan relevan"""
+        return """Anda adalah Techfour - asisten AI resmi untuk kelas Teknik Informatika 01TPLE004.
+
+📚 **DATA RESMI KELAS (UPDATE: Oktober 2025):**
+- **Pembuat**: Mahasiswa Universitas Pamulang kelas 01TPLE104
+- **Jadwal Kelas**: Sabtu, 07:40-15:20 WIB, Gedung A-UNPAM VIKTOR Lt1 Ruang 104
+- **Server Discord**: Techfour
+- **Aturan Server**: Dilarang bahas politik, SARA, dan konten toxic
+
+🗓️ **JADWAL RESMI:**
+
+**E-LEARNING (20-26 OKTOBER):**
+- Logika Informatika - Pertemuan 10
+- Fisika Dasar - Pertemuan 10  
+- Pendidikan Agama - Pertemuan 7
+- Pendidikan Pancasila - Pertemuan 7
+
+**KELAS OFFLINE (20-26 OKTOBER):**
+- Algoritma & Pemrograman - Pertemuan 10
+- Kalkulus 1 - Pertemuan 10
+- Basic English - Pertemuan 7
+- Pengantar Teknologi - Pertemuan 7
+
+**UJIAN ONLINE (27 OKTOBER - 01 NOVEMBER):**
+- Pendidikan Pancasila, Pendidikan Agama, Logika Informatika, Fisika Dasar
+
+**UJIAN OFFLINE (01 NOVEMBER):**
+- Kalkulus, Algoritma & Pemrograman, Basic English, Pengantar Teknologi
+
+🎯 **ATURAN UTAMA:**
+1. **JIKA PERTANYAAN TERKAIT:** UJIAN, UTS, UAS → BERIKAN DATA RESMI Jadwal Ujian
+2. **JIKA PERTANYAAN TERKAIT:** E-LEARNING, MENTARI, KELAS ONLINE → BERIKAN DATA RESMI Jadwal E-Learning
+3. **JIKA PERTANYAAN TERKAIT:** JADWAL & PERTEMUAN → BERIKAN DATA RESMI JADWAL
+4. **JIKA PERIODE 27 OKTOBER - 01 NOVEMBER** → ARAHKAN KE JADWAL UJIAN
+5. **UNTUK PERTANYAAN AKADEMIK:** Kalkulus, Matematika, Fisika → BERIKAN RUMUS & PERHITUNGAN AKURAT
+6. **UNTUK BAHASA INGGRIS** → BERIKAN JAWABAN TEPAT BERDASARKAN SUMBER RESMI
+7. **UNTUK PROGRAMMING** → BERIKAN CONTOH CODE YANG BENAR DAN WORKING
+
+💡 **UNTUK SEMUA PERTANYAAN LAIN:**
+- JAWAB dengan RELEVAN dan TEPAT berdasarkan pengetahuan umum
+- Berikan penjelasan yang JELAS dan BERMANFAAT
+- Jika tidak tahu informasi spesifik, berikan panduan umum atau arahkan ke sumber yang tepat
+- Gunakan bahasa Indonesia santai seperti teman sekelas
+- Prioritaskan jawaban yang praktis dan aplikatif
+
+📝 **FORMAT RESPONS:**
+- Gunakan poin-poin untuk informasi penting
+- **Bold** untuk istilah teknis
+- Code blocks untuk programming examples
+- Struktur yang rapi dan mudah dibaca
+
+Ingat: Jadilah asisten yang HELPFUL, SMART, dan RELEVAN untuk semua pertanyaan!"""
     
     def clean_old_cache(self):
         """Bersihkan cache yang sudah expired"""
@@ -320,21 +321,18 @@ json={
         for key in expired_keys:
             del self.response_cache[key]
 
-groq_service = GroqAIService(GROQ_API_KEY) if GROQ_API_KEY else None
-
-# ⏰ BACKGROUND TASKS
-@tasks.loop(hours=24)
-async def reset_daily_task():
-    rate_limiter.reset_daily_limits()
-    logging.info("Daily limits reset via background task")
+# Global instance
+deepseek_service = DeepSeekService()
 
 @tasks.loop(minutes=5)
 async def clean_cache_task():
-    if groq_service:
-        groq_service.clean_old_cache()
-    logging.info("Cache cleaned")
+    # Bersihkan cache DeepSeek
+    deepseek_service.clean_old_cache()
+    logging.info("DeepSeek cache cleaned")
 
 @tasks.loop(hours=24)
+async def reset_daily_task():
+    rate_limiter.reset_daily_limits()
 async def check_inactive_members():
     try:
         for guild in bot.guilds:
@@ -476,21 +474,17 @@ async def on_message(message: discord.Message):
 
         await message.channel.typing()
         
-        if not groq_service or not GROQ_API_KEY:
-            await message.channel.send(
-                f"{message.author.mention} 🤖 Maaf, saat ini Anda tidak bisa menggunakan AI. Silahkan menghubungi developer - Jundi Lesana @jonjon1227"
-            )
-            return
-
         try:
             await rate_limiter.start_ai_request(message.author.id)
-            reply = await groq_service.get_response(user_prompt, message.author.id)
+            
+            # 🎯 GUNAKAN DEEPSEEK YANG BARU
+            reply = await deepseek_service.get_response(user_prompt, message.author.id)
             
             if reply:
                 await message.channel.send(reply)
             else:
                 await message.channel.send(
-                    f"{message.author.mention} 🤖 Maaf, terjadi error. Coba lagi nanti."
+                    f"{message.author.mention} 🤖 Maaf, DeepSeek sedang sibuk. Coba lagi sebentar ya!"
                 )
                 
         except Exception as e:
@@ -515,19 +509,18 @@ async def on_voice_state_update(member: discord.Member, before: discord.VoiceSta
     if after.channel is not None:
         activity_tracker.update_activity(member.id)
 
-# 🎮 BOT COMMANDS
 @bot.command()
-async def usage(ctx: commands.Context):
-    is_user_admin = is_admin(ctx.author)
-    daily_limit = 50 if is_user_admin else 30
+async def ping(ctx):
+    latency = round(bot.latency * 1000)
     daily_usage = rate_limiter.user_daily_usage.get(ctx.author.id, 0)
-    remaining = daily_limit - daily_usage
+    active_requests = rate_limiter.active_ai_requests
     
-    embed = discord.Embed(title="📊 Usage Stats", color=discord.Color.blue())
-    embed.add_field(name="Used Today", value=f"{daily_usage} prompts", inline=True)
-    embed.add_field(name="Limit", value=f"{daily_limit} prompts", inline=True)
-    embed.add_field(name="Remaining", value=f"{remaining} prompts", inline=True)
-    embed.add_field(name="Reset In", value="24 hours", inline=True)
+    embed = discord.Embed(title="🏓 Pong!", color=discord.Color.green())
+    embed.add_field(name="Latency", value=f"{latency}ms", inline=True)
+    embed.add_field(name="Daily Usage", value=f"{daily_usage}/50", inline=True)
+    embed.add_field(name="Active AI Requests", value=f"{active_requests}/2", inline=True)
+    embed.add_field(name="AI Provider", value="🤖 DeepSeek", inline=True)  # 🎯 UPDATE
+    embed.add_field(name="Status", value="✅ Unlimited & Smart", inline=True)  # 🎯 UPDATE
     
     await ctx.send(embed=embed)
 
@@ -557,7 +550,7 @@ async def check_inactive(ctx: commands.Context):
 # 🚀 BOT STARTUP
 @bot.event
 async def on_ready():
-    print(f"✅ Logged in as {bot.user.name} (ID: {bot.user.id})")
+    logging.info(f"✅ Logged in as {bot.user.name} (ID: {bot.user.id})")
     print(f"🌐 Connected to {len(bot.guilds)} servers")
     logging.info(f"Bot siap dengan PID: {os.getpid()}")
     
@@ -589,8 +582,7 @@ async def main():
     except Exception as e:
         logging.exception(f"Bot crashed: {e}")
     finally:
-        if groq_service:
-            await groq_service.close_session()
+        # Tidak perlu close Groq session lagi
         if webhook_logger:
             await webhook_logger.close_session()
         await bot.close()
