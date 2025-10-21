@@ -9,9 +9,9 @@ class DeepSeekService:
         self.api_key = os.getenv("DEEPSEEK_API_KEY")
         if not self.api_key:
             raise ValueError("❌ DEEPSEEK_API_KEY harus diisi di .env")
-        self.base_url = "https://api.deepseek.com/v1/chat/completions"  # ✅ FIX: HAPUS SPASI!
-        self.response_cache: dict = {}
-        self.CACHE_DURATION = 300  # 5 menit
+        if self.api_key == "free":
+            raise ValueError("❌ 'free' bukan API key valid. Daftar di https://platform.deepseek.com")
+        self.base_url = "https://api.deepseek.com/v1/chat/completions"
         
     async def get_response(self, user_prompt: str, user_id: int) -> str | None:
         """Dapatkan response dari DeepSeek AI dengan caching"""
