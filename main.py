@@ -426,7 +426,6 @@ async def main():
     except Exception as e:
         logging.exception(f"Bot crashed: {e}")
     finally:
-        # Tidak perlu close Groq session lagi
         if webhook_logger:
             await webhook_logger.close_session()
         await bot.close()
