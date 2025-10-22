@@ -10,14 +10,15 @@ import aiohttp
 from flask import Flask
 from threading import Thread
 from typing import Dict, List, Optional
-from huggingface_service import huggingface_service
+from huggingface_service import huggingface_service  
 
 # 🚀 WEB SERVER FOR RAILWAY
 app = Flask('')
 
 @app.route('/')
 def home():
-    return "🤖 Techfour Bot is Alive! Powered by HuggingFace"
+    return "🤖 Techfour Bot is Alive! Powered by HuggingFace" 
+
 def run_webserver():
     port = int(os.environ.get("PORT", 8080))
     app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
@@ -156,6 +157,7 @@ def is_admin(member: discord.Member) -> bool:
             return True
     
     return False
+
 # 🔗 WEBHOOK LOGGER
 class WebhookLogger:
     def __init__(self, webhook_url: str):
@@ -201,7 +203,7 @@ async def friday_reminder():
     # Log untuk verifikasi
     logging.info(f"[FRIDAY REMINDER] Triggered at UTC: {now_utc.strftime('%Y-%m-%d %H:%M')} | WIB: {now_wib.strftime('%A, %Y-%m-%d %H:%M')}")
     
-# Check if today is FRIDAY in WIB
+    # Check if today is FRIDAY in WIB
     if now_wib.weekday() == 4:  # 4 = Jumat (Senin=0, ..., Jumat=4)
         try:
             message = (
@@ -345,8 +347,8 @@ async def ping(ctx):
     embed.add_field(name="Latency", value=f"{latency}ms", inline=True)
     embed.add_field(name="Daily Usage", value=f"{daily_usage}/50", inline=True)
     embed.add_field(name="Active AI Requests", value=f"{active_requests}/2", inline=True)
-    embed.add_field(name="AI Provider", value="🤖 HuggingFace + Llama 3.1", inline=True)
-    embed.add_field(name="Status", value="✅ Unlimited & Free", inline=True)
+    embed.add_field(name="AI Provider", value="🤖 HuggingFace + Llama 3.1", inline=True)  # ✅ PERUBAHAN 3
+    embed.add_field(name="Status", value="✅ Unlimited & Free", inline=True)  # ✅ PERUBAHAN 3
     
     await ctx.send(embed=embed)
 
@@ -391,6 +393,21 @@ async def check_inactive_members():
     except Exception as e:
         logging.error(f"Error in inactive members check: {e}")
 
+@tasks.loop(hours=24)
+async def reset_daily_task():
+    """Reset daily limits setiap 24 jam"""
+    rate_limiter.reset_daily_limits()
+    logging.info("🔄 Daily limits reset by scheduled task")
+
+@tasks.loop(minutes=30)
+async def clean_cache_task():
+    """Bersihkan cache Hugging Face setiap 30 menit"""
+    try:
+        huggingface_service.clean_old_cache()
+        logging.info("🧹 HuggingFace cache cleaned")
+    except Exception as e:
+        logging.error(f"Error cleaning cache: {e}")
+
 # 🚀 BOT STARTUP
 @bot.event
 async def on_ready():
@@ -406,6 +423,7 @@ async def on_ready():
             if not member.bot:
                 activity_tracker.update_activity(member.id)
     
+    # Start semua tasks
     reset_daily_task.start()
     clean_cache_task.start()
     check_inactive_members.start()
