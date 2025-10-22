@@ -10,7 +10,7 @@ import aiohttp
 from flask import Flask
 from threading import Thread
 from typing import Dict, List, Optional
-from groq_service import groq_service
+from huggingface_service import huggingface_service as ai_service
 
 # 🚀 WEB SERVER FOR RAILWAY
 app = Flask('')
