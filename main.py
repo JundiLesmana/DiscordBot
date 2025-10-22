@@ -10,14 +10,14 @@ import aiohttp
 from flask import Flask
 from threading import Thread
 from typing import Dict, List, Optional
-from huggingface_service import huggingface_service as ai_service
+from huggingface_service import huggingface_service
 
 # 🚀 WEB SERVER FOR RAILWAY
 app = Flask('')
 
 @app.route('/')
 def home():
-    return "🤖 Techfour Bot is Alive! Powered by Groq"
+    return "🤖 Techfour Bot is Alive! Powered by HuggingFace"
 def run_webserver():
     port = int(os.environ.get("PORT", 8080))
     app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
@@ -305,7 +305,7 @@ async def on_message(message: discord.Message):
         try:
             await rate_limiter.start_ai_request(message.author.id)
             
-            reply = await groq_service.get_response(user_prompt, message.author.id)
+            reply = await huggingface_service.get_response(user_prompt, message.author.id)
             
             if reply:
                 await message.channel.send(reply)
@@ -345,8 +345,8 @@ async def ping(ctx):
     embed.add_field(name="Latency", value=f"{latency}ms", inline=True)
     embed.add_field(name="Daily Usage", value=f"{daily_usage}/50", inline=True)
     embed.add_field(name="Active AI Requests", value=f"{active_requests}/2", inline=True)
-    embed.add_field(name="AI Provider", value="🤖 Groq + Llama 3.1", inline=True)
-    embed.add_field(name="Status", value="✅ Unlimited & Smart", inline=True)
+    embed.add_field(name="AI Provider", value="🤖 HuggingFace + Llama 3.1", inline=True)
+    embed.add_field(name="Status", value="✅ Unlimited & Free", inline=True)
     
     await ctx.send(embed=embed)
 
