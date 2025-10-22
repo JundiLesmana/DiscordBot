@@ -171,7 +171,7 @@ Ingat: Jadilah asisten yang GENIUS, PINTAR, dan RELEVAN untuk semua pertanyaan!"
         try:
             response = self.pipeline(
                 prompt,
-                max_new_tokens=4000,  # 2x lebih banyak dari Groq!
+                max_new_tokens=4000,  
                 temperature=0.7,
                 top_p=0.9,
                 do_sample=True,
@@ -181,7 +181,7 @@ Ingat: Jadilah asisten yang GENIUS, PINTAR, dan RELEVAN untuk semua pertanyaan!"
             )
             
             generated_text = response[0]['generated_text']
-            # Extract hanya bagian assistant response
+            
             if "Assistant:" in generated_text:
                 return generated_text.split("Assistant:")[-1].strip()
             else:
