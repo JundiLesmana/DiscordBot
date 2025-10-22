@@ -346,7 +346,7 @@ async def ping(ctx):
     embed.add_field(name="Daily Usage", value=f"{daily_usage}/50", inline=True)
     embed.add_field(name="Active AI Requests", value=f"{active_requests}/2", inline=True)
     embed.add_field(name="AI Provider", value="🤖 Groq + Llama 3.1", inline=True)
-    embed.add_field(name="Status", value="✅ Unlimited & Smart", inline=True)  # 🎯 UPDATE
+    embed.add_field(name="Status", value="✅ Unlimited & Smart", inline=True)
     
     await ctx.send(embed=embed)
 
