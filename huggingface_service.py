@@ -25,7 +25,6 @@ class HuggingFaceService:
                 model=self.model_name,
                 torch_dtype=torch.float32,  
                 device=-1,  
-                max_memory={0: "1GB"},  # Limit memory usage
                 model_kwargs={
                     "low_cpu_mem_usage": True,
                     "offload_folder": "./offload",
