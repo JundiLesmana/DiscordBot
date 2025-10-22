@@ -73,7 +73,7 @@ class RateLimiter:
         logging.info("Daily limits reset")
     
     def get_daily_limit(self, is_admin: bool) -> int:
-        return 30 if is_admin else 15
+        return 50 if is_admin else 30
     
     async def can_use_ai(self, user_id: int, is_admin: bool) -> tuple[bool, Optional[str]]:
         current_time = py_time.time()
@@ -316,7 +316,7 @@ async def on_message(message: discord.Message):
                 
         except Exception as e:
             logging.exception(f"Error processing AI request: {e}")
-            await message.channel.send(f"{message.author.mention}🤖 Maaf, terjadi error. silahkan hubungi developer @jonjon1227 .")
+            await message.channel.send(f"{message.author.mention}🤖 Maaf, terjadi error. silahkan hubungi developer @jonjon1227")
             
         finally:
             await rate_limiter.end_ai_request()
