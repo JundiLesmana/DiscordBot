@@ -191,7 +191,6 @@ async def friday_reminder():
                     except:
                         continue
 
-# 🎯 EVENT HANDLERS
 @bot.event
 async def on_message(message: discord.Message):
     if message.author == bot.user:
@@ -207,24 +206,8 @@ async def on_message(message: discord.Message):
             await message.channel.send(f"{message.author.mention}, jaga bahasanya ya 🙏")
         except:
             pass
-        return
 
-# 🖼️ EVENT HANDLER: on_message
-@bot.event
-async def on_message(message: discord.Message):
-    if message.author == bot.user:
-        return
-
-    activity_tracker.update_activity(message.author.id)
-
-    # 🔕 Censor kata kasar
-    TOXIC_KEYWORDS = ["kontol", "memek", "bangsat", "ngentod"]
-    if any(k in message.content.lower() for k in TOXIC_KEYWORDS):
-        try:
-            await message.delete()
-            await message.channel.send(f"{message.author.mention}, jaga bahasanya ya 🙏")
-        except:
-            pass
+        await bot.process_commands(message)
         return
 
     # 🖼️ OCR HANDLER
@@ -233,64 +216,38 @@ async def on_message(message: discord.Message):
         if any(attachment.filename.lower().endswith(ext) for ext in [".png", ".jpg", ".jpeg", ".pdf"]):
             import requests
             try:
-                # Pastikan OCR_API_KEY tersedia
                 if not OCR_API_KEY:
                     await message.channel.send("❌ OCR tidak tersedia: API key belum dikonfigurasi.")
-                    return
-
-                # Perbaiki URL: HAPUS SPASI DI AKHIR!
-                ocr_url = "https://api.ocr.space/parse/image"
-
-                # Kirim permintaan ke OCR.Space
-                response = requests.post(
-                    ocr_url,
-                    data={"apikey": OCR_API_KEY, "OCREngine": 2, "language": "eng"},
-                    files={"file": await attachment.read()},
-                    timeout=15  
-                )
-
-                # Cek status HTTP
-                if response.status_code != 200:
-                    await message.channel.send(f"❌ OCR gagal: status {response.status_code}")
-                    return
-
-                result = response.json()
-
-                # Cek apakah ada error dari OCR.Space
-                if not result.get("IsSuccessful", False):
-                    error_msg = result.get("ErrorMessage", ["Tidak diketahui"])[0]
-                    await message.channel.send(f"❌ OCR error: {error_msg}")
-                    return
-
-                # Check parsed results
-                parsed_results = result.get("ParsedResults", [])
-                if not parsed_results:
-                    await message.channel.send("❌ Tidak ada teks yang ditemukan di gambar.")
-                    return
-
-                parsed_text = parsed_results[0].get("ParsedText", "").strip()
-                if not parsed_text:
-                    await message.channel.send("❌ Teks terdeteksi, tetapi kosong.")
-                    return
-
-                # send result OCR
-                await message.channel.send("📄 **Hasil OCR:**\n" + parsed_text[:1500])
-
-                # send AI
-                reply = await ai_bot_service.get_response(parsed_text, message.author.id)
-                await message.channel.send(reply[:2000])
-
-            except requests.exceptions.Timeout:
-                await message.channel.send("❌ OCR timeout: gambar terlalu besar atau server lambat.")
-            except requests.exceptions.RequestException as e:
-                await message.channel.send(f"❌ Gagal menghubungi layanan OCR: {e}")
-            except KeyError as e:
-                await message.channel.send(f"❌ Struktur respons OCR tidak sesuai: key {e} tidak ditemukan.")
+                else:
+                    ocr_url = "https://api.ocr.space/parse/image"
+                    response = requests.post(
+                        ocr_url,
+                        data={"apikey": OCR_API_KEY, "OCREngine": 2, "language": "eng"},
+                        files={"file": await attachment.read()},
+                        timeout=15
+                    )
+                    if response.status_code == 200:
+                        result = response.json()
+                        if result.get("IsSuccessful", False):
+                            parsed_results = result.get("ParsedResults", [])
+                            if parsed_results:
+                                parsed_text = parsed_results[0].get("ParsedText", "").strip()
+                                if parsed_text:
+                                    await message.channel.send("📄 **Hasil OCR:**\n" + parsed_text[:1500])
+                                    reply = await ai_bot_service.get_response(parsed_text, message.author.id)
+                                    await message.channel.send(reply[:2000])
+                                else:
+                                    await message.channel.send("❌ Teks terdeteksi, tetapi kosong.")
+                            else:
+                                await message.channel.send("❌ Tidak ada teks yang ditemukan di gambar.")
+                        else:
+                            error_msg = result.get("ErrorMessage", ["Tidak diketahui"])[0]
+                            await message.channel.send(f"❌ OCR error: {error_msg}")
+                    else:
+                        await message.channel.send(f"❌ OCR gagal: status {response.status_code}")
             except Exception as e:
-                import logging
-                logging.exception("OCR error detail:")
                 await message.channel.send(f"❌ Gagal membaca gambar: {e}")
-            return
+            return  # ✅ Aman, karena OCR selesai
 
     # 🤖 Handle Mention
     if bot.user.mentioned_in(message) and not message.mention_everyone:
@@ -315,21 +272,7 @@ async def on_message(message: discord.Message):
             await message.channel.send(f"{message.author.mention} 🤖 Maaf, terjadi error.")
         finally:
             await rate_limiter.end_ai_request()
+        return  # ✅ Sudah handle mention, tidak perlu process_commands
 
+    # 🔁 Jika tidak kena censor, OCR, atau mention → proses command biasa
     await bot.process_commands(message)
-
-
-# 🚀 BOT STARTUP — HANYA SATU on_ready
-@bot.event
-async def on_ready():
-    # Debug: cek versi Google Generative AI
-    import google.generativeai as genai
-    print("✅ [DEBUG] Google Generative AI Version:", genai.__version__)
-
-    keep_alive()
-    print(f"✅ {bot.user} online di {len(bot.guilds)} server!")
-    reset_daily_task.start()
-    clean_cache_task.start()
-    check_inactive_members.start()
-    friday_reminder.start()
-    await bot.change_presence(activity=discord.Game(name="!ping | @Techfour"))
