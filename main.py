@@ -209,22 +209,86 @@ async def on_message(message: discord.Message):
             pass
         return
 
+# 🖼️ EVENT HANDLER: on_message
+@bot.event
+async def on_message(message: discord.Message):
+    if message.author == bot.user:
+        return
+
+    activity_tracker.update_activity(message.author.id)
+
+    # 🔕 Censor kata kasar
+    TOXIC_KEYWORDS = ["kontol", "memek", "bangsat", "ngentod"]
+    if any(k in message.content.lower() for k in TOXIC_KEYWORDS):
+        try:
+            await message.delete()
+            await message.channel.send(f"{message.author.mention}, jaga bahasanya ya 🙏")
+        except:
+            pass
+        return
+
     # 🖼️ OCR HANDLER
     if message.attachments:
         attachment = message.attachments[0]
         if any(attachment.filename.lower().endswith(ext) for ext in [".png", ".jpg", ".jpeg", ".pdf"]):
             import requests
             try:
-                r = requests.post(
-                    "https://api.ocr.space/parse/image",
-                    data={"apikey": OCR_API_KEY, "OCREngine": 2},
+                # Pastikan OCR_API_KEY tersedia
+                if not OCR_API_KEY:
+                    await message.channel.send("❌ OCR tidak tersedia: API key belum dikonfigurasi.")
+                    return
+
+                # Perbaiki URL: HAPUS SPASI DI AKHIR!
+                ocr_url = "https://api.ocr.space/parse/image"
+
+                # Kirim permintaan ke OCR.Space
+                response = requests.post(
+                    ocr_url,
+                    data={"apikey": OCR_API_KEY, "OCREngine": 2, "language": "eng"},
                     files={"file": await attachment.read()},
+                    timeout=15  
                 )
-                parsed_text = r.json()["ParsedResults"][0]["ParsedText"]
+
+                # Cek status HTTP
+                if response.status_code != 200:
+                    await message.channel.send(f"❌ OCR gagal: status {response.status_code}")
+                    return
+
+                result = response.json()
+
+                # Cek apakah ada error dari OCR.Space
+                if not result.get("IsSuccessful", False):
+                    error_msg = result.get("ErrorMessage", ["Tidak diketahui"])[0]
+                    await message.channel.send(f"❌ OCR error: {error_msg}")
+                    return
+
+                # Check parsed results
+                parsed_results = result.get("ParsedResults", [])
+                if not parsed_results:
+                    await message.channel.send("❌ Tidak ada teks yang ditemukan di gambar.")
+                    return
+
+                parsed_text = parsed_results[0].get("ParsedText", "").strip()
+                if not parsed_text:
+                    await message.channel.send("❌ Teks terdeteksi, tetapi kosong.")
+                    return
+
+                # send result OCR
                 await message.channel.send("📄 **Hasil OCR:**\n" + parsed_text[:1500])
+
+                # send AI
                 reply = await ai_bot_service.get_response(parsed_text, message.author.id)
                 await message.channel.send(reply[:2000])
+
+            except requests.exceptions.Timeout:
+                await message.channel.send("❌ OCR timeout: gambar terlalu besar atau server lambat.")
+            except requests.exceptions.RequestException as e:
+                await message.channel.send(f"❌ Gagal menghubungi layanan OCR: {e}")
+            except KeyError as e:
+                await message.channel.send(f"❌ Struktur respons OCR tidak sesuai: key {e} tidak ditemukan.")
             except Exception as e:
+                import logging
+                logging.exception("OCR error detail:")
                 await message.channel.send(f"❌ Gagal membaca gambar: {e}")
             return
 
@@ -254,10 +318,13 @@ async def on_message(message: discord.Message):
 
     await bot.process_commands(message)
 
+
+# 🚀 BOT STARTUP — HANYA SATU on_ready
 @bot.event
 async def on_ready():
-    import google.generativeai as genai  # tambahkan ini
-    print("✅ [DEBUG] Google Generative AI Version:", genai.__version__)  # tambahkan ini
+    # Debug: cek versi Google Generative AI
+    import google.generativeai as genai
+    print("✅ [DEBUG] Google Generative AI Version:", genai.__version__)
 
     keep_alive()
     print(f"✅ {bot.user} online di {len(bot.guilds)} server!")
@@ -266,37 +333,3 @@ async def on_ready():
     check_inactive_members.start()
     friday_reminder.start()
     await bot.change_presence(activity=discord.Game(name="!ping | @Techfour"))
-
-# 🚀 BOT STARTUP
-@bot.event
-async def on_ready():
-    keep_alive()
-    print(f"✅ {bot.user} online di {len(bot.guilds)} server!")
-    reset_daily_task.start()
-    clean_cache_task.start()
-    check_inactive_members.start()
-    friday_reminder.start()
-    await bot.change_presence(activity=discord.Game(name="!ping | @Techfour"))
-
-@tasks.loop(hours=24)
-async def reset_daily_task():
-    rate_limiter.reset_daily_limits()
-
-@tasks.loop(minutes=30)
-async def clean_cache_task():
-    ai_bot_service.clean_old_cache()
-
-@tasks.loop(hours=24)
-async def check_inactive_members():
-    pass  # tetap seperti sebelumnya
-
-async def main():
-    try:
-        keep_alive()
-        await bot.start(DISCORD_TOKEN)
-    finally:
-        await webhook_logger.close_session()
-        await bot.close()
-
-if __name__ == "__main__":
-    asyncio.run(main())
