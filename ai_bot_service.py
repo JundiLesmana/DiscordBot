@@ -49,7 +49,7 @@ class SmartAIService:
 
     def _gemini_query(self, text):
         try:
-            model = genai.GenerativeModel("models/gemini-1.5-flash")
+            model = genai.GenerativeModel("gemini-pro")
             resp = model.generate_content(text)
             return resp.text
         except Exception as e:
