@@ -11,9 +11,8 @@ from flask import Flask
 from threading import Thread
 from typing import Dict, List, Optional
 from ai_bot_service import ai_bot_service
-import google.generativeai as genai
 
-print("✅ [DEBUG] Google Generative AI Version:", genai.__version__)
+print("✅ [DEBUG] Starting Techfour Bot...")
 
 app = Flask('')
 
@@ -47,9 +46,6 @@ load_dotenv()
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 OCR_API_KEY = os.getenv("OCR_API_KEY")
-WOLFRAM_APP_ID = os.getenv("WOLFRAM_APP_ID")
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-HF_TOKEN = os.getenv("HF_TOKEN")
 
 if not DISCORD_TOKEN:
     raise ValueError("❌ Pastikan DISCORD_TOKEN sudah diisi di file .env")
@@ -191,6 +187,70 @@ async def friday_reminder():
                     except:
                         continue
 
+# 🖼️ OCR HANDLER YANG DIPERBAIKI
+async def handle_ocr_attachment(attachment):
+    """Handle OCR processing dengan error handling yang lebih baik"""
+    try:
+        import requests
+        
+        if not OCR_API_KEY:
+            return "❌ OCR tidak tersedia: API key belum dikonfigurasi."
+
+        # Validasi file size
+        if attachment.size > 10_000_000:  # 10MB limit
+            return "❌ File terlalu besar (max 10MB)."
+
+        ocr_url = "https://api.ocr.space/parse/image"
+        
+        # Download attachment
+        file_data = await attachment.read()
+        
+        response = requests.post(
+            ocr_url,
+            data={
+                "apikey": OCR_API_KEY,
+                "OCREngine": 2,
+                "language": "eng",
+                "scale": "true",
+                "isTable": "true"
+            },
+            files={"file": (attachment.filename, file_data, attachment.content_type)},
+            timeout=30
+        )
+        
+        if response.status_code == 200:
+            result = response.json()
+            if result.get("IsSuccessful", False):
+                parsed_results = result.get("ParsedResults", [])
+                if parsed_results:
+                    parsed_text = parsed_results[0].get("ParsedText", "").strip()
+                    if parsed_text:
+                        return f"📄 **Hasil OCR:**\n{parsed_text[:1500]}"
+                    else:
+                        return "❌ Teks terdeteksi, tetapi kosong."
+                else:
+                    return "❌ Tidak ada teks yang ditemukan di gambar."
+            else:
+                error_msg = result.get("ErrorMessage", "Unknown error")
+                return f"❌ OCR Error: {error_msg}"
+        else:
+            return f"❌ OCR API Error: Status {response.status_code}"
+            
+    except requests.exceptions.Timeout:
+        return "❌ OCR timeout - coba lagi nanti."
+    except requests.exceptions.RequestException as e:
+        return f"❌ Network error: {e}"
+    except Exception as e:
+        return f"❌ OCR processing error: {str(e)}"
+
+@bot.event
+async def on_ready():
+    print(f'✅ {bot.user.name} berhasil login!')
+    print(f'📊 Connected to {len(bot.guilds)} guilds')
+    friday_reminder.start()
+    keep_alive()
+    logging.info("Bot fully operational")
+
 @bot.event
 async def on_message(message: discord.Message):
     if message.author == bot.user:
@@ -209,45 +269,28 @@ async def on_message(message: discord.Message):
         await bot.process_commands(message)
         return
 
-    # 🖼️ OCR HANDLER
+    # 🖼️ OCR HANDLER - VERSI DIPERBAIKI
     if message.attachments:
-        attachment = message.attachments[0]
-        if any(attachment.filename.lower().endswith(ext) for ext in [".png", ".jpg", ".jpeg", ".pdf"]):
-            import requests
-            try:
-                if not OCR_API_KEY:
-                    await message.channel.send("❌ OCR tidak tersedia: API key belum dikonfigurasi.")
-                else:
-                    ocr_url = "https://api.ocr.space/parse/image" 
-                    response = requests.post(
-                        ocr_url,
-                        data={"apikey": OCR_API_KEY, "OCREngine": 2, "language": "eng"},
-                        files={"file": await attachment.read()},
-                        timeout=15
-                    )
-                    if response.status_code == 200:
-                        result = response.json()
-                        if result.get("IsSuccessful", False):
-                            parsed_results = result.get("ParsedResults", [])
-                            if parsed_results:
-                                parsed_text = parsed_results[0].get("ParsedText", "").strip()
-                                if parsed_text:
-                                    await message.channel.send("📄 **Hasil OCR:**\n" + parsed_text[:1500])
-                                    reply = await ai_bot_service.get_response(parsed_text, message.author.id)
-                                    await message.channel.send(reply[:2000])
-                                else:
-                                    await message.channel.send("❌ Teks terdeteksi, tetapi kosong.")
-                            else:
-                                await message.channel.send("❌ Tidak ada teks yang ditemukan di gambar.")
-                        else:
-                            error_msg = result.get("ErrorMessage", ["Tidak diketahui"])[0]
-                            await message.channel.send(f"❌ OCR error: {error_msg}")
-                    else:
-                        await message.channel.send(f"❌ OCR gagal: status {response.status_code}")
-            except Exception as e:
-                await message.channel.send(f"❌ Gagal membaca gambar: {e}")
-
-            return
+        for attachment in message.attachments:
+            if any(attachment.filename.lower().endswith(ext) for ext in [".png", ".jpg", ".jpeg", ".pdf"]):
+                try:
+                    await message.channel.typing()
+                    ocr_result = await handle_ocr_attachment(attachment)
+                    await message.channel.send(ocr_result)
+                    
+                    # Jika OCR berhasil, proses dengan AI
+                    if "**Hasil OCR:**" in ocr_result:
+                        try:
+                            reply = await ai_bot_service.get_response(ocr_result, message.author.id)
+                            await message.channel.send(reply[:2000])
+                        except Exception as e:
+                            logging.error(f"AI processing error after OCR: {e}")
+                            await message.channel.send("🤖 Berhasil membaca gambar, tapi AI sedang sibuk.")
+                    
+                except Exception as e:
+                    logging.error(f"OCR attachment error: {e}")
+                    await message.channel.send("❌ Gagal memproses gambar. Coba lagi nanti.")
+                return
 
     # 🤖 Handle Mention
     if bot.user.mentioned_in(message) and not message.mention_everyone:
@@ -275,3 +318,11 @@ async def on_message(message: discord.Message):
         return
 
     await bot.process_commands(message)
+
+# 🚀 START BOT
+if __name__ == "__main__":
+    try:
+        bot.run(DISCORD_TOKEN)
+    except Exception as e:
+        print(f"❌ Failed to start bot: {e}")
+        logging.critical(f"Bot startup failed: {e}")
