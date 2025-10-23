@@ -54,7 +54,7 @@ class SmartAIService:
             for m in genai.list_models():
              if 'generateContent' in m.supported_generation_methods:
                 print(f"  - {m.name}")
-            model = genai.GenerativeModel("models/gemini-pro")
+            model = genai.GenerativeModel("models/gemini-2.5-flash")
             resp = model.generate_content(text)
             return resp.text
         except Exception as e:
