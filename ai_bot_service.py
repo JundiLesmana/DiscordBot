@@ -55,4 +55,4 @@ class SmartAIService:
         except Exception as e:
             return f"❌ Gemini Error: {e}"
 
-huggingface_service = SmartAIService()
+ai_bot_service = SmartAIService()
