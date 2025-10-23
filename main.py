@@ -11,7 +11,9 @@ from flask import Flask
 from threading import Thread
 from typing import Dict, List, Optional
 from ai_bot_service import ai_bot_service
+import google.generativeai as genai
 
+print("✅ [DEBUG] Google Generative AI Version:", genai.__version__)
 # 🚀 WEB SERVER FOR RENDER
 app = Flask('')
 
@@ -251,6 +253,19 @@ async def on_message(message: discord.Message):
             await rate_limiter.end_ai_request()
 
     await bot.process_commands(message)
+
+@bot.event
+async def on_ready():
+    import google.generativeai as genai  # tambahkan ini
+    print("✅ [DEBUG] Google Generative AI Version:", genai.__version__)  # tambahkan ini
+
+    keep_alive()
+    print(f"✅ {bot.user} online di {len(bot.guilds)} server!")
+    reset_daily_task.start()
+    clean_cache_task.start()
+    check_inactive_members.start()
+    friday_reminder.start()
+    await bot.change_presence(activity=discord.Game(name="!ping | @Techfour"))
 
 # 🚀 BOT STARTUP
 @bot.event
