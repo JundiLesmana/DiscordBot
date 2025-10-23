@@ -14,7 +14,7 @@ from ai_bot_service import ai_bot_service
 import google.generativeai as genai
 
 print("✅ [DEBUG] Google Generative AI Version:", genai.__version__)
-# 🚀 WEB SERVER FOR RENDER
+
 app = Flask('')
 
 @app.route('/')
@@ -206,7 +206,6 @@ async def on_message(message: discord.Message):
             await message.channel.send(f"{message.author.mention}, jaga bahasanya ya 🙏")
         except:
             pass
-
         await bot.process_commands(message)
         return
 
@@ -219,7 +218,7 @@ async def on_message(message: discord.Message):
                 if not OCR_API_KEY:
                     await message.channel.send("❌ OCR tidak tersedia: API key belum dikonfigurasi.")
                 else:
-                    ocr_url = "https://api.ocr.space/parse/image"
+                    ocr_url = "https://api.ocr.space/parse/image" 
                     response = requests.post(
                         ocr_url,
                         data={"apikey": OCR_API_KEY, "OCREngine": 2, "language": "eng"},
@@ -247,7 +246,8 @@ async def on_message(message: discord.Message):
                         await message.channel.send(f"❌ OCR gagal: status {response.status_code}")
             except Exception as e:
                 await message.channel.send(f"❌ Gagal membaca gambar: {e}")
-            return  # ✅ Aman, karena OCR selesai
+
+            return
 
     # 🤖 Handle Mention
     if bot.user.mentioned_in(message) and not message.mention_everyone:
@@ -272,7 +272,6 @@ async def on_message(message: discord.Message):
             await message.channel.send(f"{message.author.mention} 🤖 Maaf, terjadi error.")
         finally:
             await rate_limiter.end_ai_request()
-        return  # ✅ Sudah handle mention, tidak perlu process_commands
+        return
 
-    # 🔁 Jika tidak kena censor, OCR, atau mention → proses command biasa
     await bot.process_commands(message)
