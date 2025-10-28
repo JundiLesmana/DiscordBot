@@ -39,7 +39,7 @@ class SmartAIService:
 
     def _codegemma_query(self, prompt):
         try:
-            url = "https://api-inference.huggingface.co/models/google/codegemma-7b"
+            url = "https://router.huggingface.co/hf-inference/models/google/codegemma-7b"
             headers = {"Authorization": f"Bearer {self.hf_token}"}
             payload = {"inputs": prompt, "parameters": {"max_new_tokens": 512}}
             r = requests.post(url, headers=headers, json=payload)
