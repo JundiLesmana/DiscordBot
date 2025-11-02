@@ -274,40 +274,21 @@ def extract_start_date(date_range):
 
 def get_current_jadwal():
     """Dapatkan jadwal yang sesuai dengan tanggal sekarang"""
-    now_wib = datetime.now(WIB)
+    now_wib = datetime.now(WIB).replace(tzinfo=None)  # ✅ HAPUS TIMEZONE UNTUK PERBANDINGAN
     jadwal_data = parse_jadwal_file()
     
     current_jadwal = []
     
     for jadwal in jadwal_data:
-        # Cek jika tanggal sekarang berada dalam periode jadwal
         days_diff = (jadwal['start_date'] - now_wib).days
-        
-        # Jika jadwal dimulai dalam 7 hari ke depan, tampilkan
-        if -1 <= days_diff <= 7:  # ✅ **DIPERBAIKI: include hari ini (-1)**
+        if -1 <= days_diff <= 7: 
             current_jadwal.append(jadwal)
     
     return current_jadwal
 
-# Command test jadwal
-@bot.command()
-async def test_jadwal(ctx):
-    """Test command untuk debug jadwal"""
-    now_wib = datetime.now(WIB)
-    current_jadwal = get_current_jadwal()
-    
-    debug_msg = f"🔍 **DEBUG JADWAL**\n"
-    debug_msg += f"Tanggal sekarang: {now_wib.strftime('%d/%m/%Y')}\n"
-    debug_msg += f"Jadwal ditemukan: {len(current_jadwal)}\n"
-    
-    for jadwal in current_jadwal:
-        debug_msg += f"\n- {jadwal['type']}: {jadwal['date_range']} (Start: {jadwal['start_date'].strftime('%d/%m/%Y')})"
-    
-    await ctx.send(debug_msg)
-
 def get_upcoming_jadwal():
     """Dapatkan jadwal yang akan datang untuk reminder"""
-    now_wib = datetime.now(WIB)
+    now_wib = datetime.now(WIB).replace(tzinfo=None) 
     jadwal_data = parse_jadwal_file()
     
     upcoming_jadwal = []
@@ -350,6 +331,25 @@ async def daily_jadwal_reminder():
                         continue
     else:
         print(f"🔔 [JADWAL] No upcoming jadwal for {now_wib.strftime('%Y-%m-%d')}")
+
+# ✅ FRIDAY REMINDER (YANG SUDAH ADA)
+@tasks.loop(time=time(hour=11, minute=0))
+async def friday_reminder():
+    now_utc = datetime.now(timezone.utc)
+    now_wib = now_utc.astimezone(WIB)
+    if now_wib.weekday() == 4:  # 4 = Friday
+        message = (
+            "Hai @everyone jangan lupa tugas E-learning, tulis tangan, dan lain sebagainya "
+            "dikerjakan yah. Besok jam 07:40 kita masuk kelas. Semangat 💪"
+        )
+        for guild in bot.guilds:
+            for channel in guild.text_channels:
+                if channel.permissions_for(guild.me).send_messages:
+                    try:
+                        await channel.send(message)
+                        break
+                    except:
+                        continue
 
 # ✅ FRIDAY REMINDER
 @tasks.loop(time=time(hour=11, minute=0))
