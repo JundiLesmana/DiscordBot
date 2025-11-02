@@ -284,10 +284,26 @@ def get_current_jadwal():
         days_diff = (jadwal['start_date'] - now_wib).days
         
         # Jika jadwal dimulai dalam 7 hari ke depan, tampilkan
-        if 0 <= days_diff <= 7:
+        if -1 <= days_diff <= 7:  # ✅ **DIPERBAIKI: include hari ini (-1)**
             current_jadwal.append(jadwal)
     
     return current_jadwal
+
+# Command test jadwal
+@bot.command()
+async def test_jadwal(ctx):
+    """Test command untuk debug jadwal"""
+    now_wib = datetime.now(WIB)
+    current_jadwal = get_current_jadwal()
+    
+    debug_msg = f"🔍 **DEBUG JADWAL**\n"
+    debug_msg += f"Tanggal sekarang: {now_wib.strftime('%d/%m/%Y')}\n"
+    debug_msg += f"Jadwal ditemukan: {len(current_jadwal)}\n"
+    
+    for jadwal in current_jadwal:
+        debug_msg += f"\n- {jadwal['type']}: {jadwal['date_range']} (Start: {jadwal['start_date'].strftime('%d/%m/%Y')})"
+    
+    await ctx.send(debug_msg)
 
 def get_upcoming_jadwal():
     """Dapatkan jadwal yang akan datang untuk reminder"""
@@ -429,7 +445,7 @@ async def on_message(message: discord.Message):
 
     activity_tracker.update_activity(message.author.id)
 
-    # Censor kata kasar
+    # 🔕 Censor kata kasar
     TOXIC_KEYWORDS = ["kontol", "memek", "bangsat", "ngentod"]
     if any(k in message.content.lower() for k in TOXIC_KEYWORDS):
         try:
@@ -440,28 +456,38 @@ async def on_message(message: discord.Message):
         await bot.process_commands(message)
         return
 
-    # JADWAL KULIAH HANDLER
+    # 🎓 JADWAL KULIAH HANDLER
     if bot.user.mentioned_in(message) and not message.mention_everyone:
         user_prompt = message.content.replace(f"<@{bot.user.id}>", "").replace(f"<@!{bot.user.id}>", "").strip().lower()
         
         # Cek jika user menanyakan jadwal kuliah
-        jadwal_keywords = ['jadwal', 'kuliah', 'elearning', 'e-learning', 'tatap muka', 'uas', 'perkuliahan']
+        jadwal_keywords = ['jadwal', 'kuliah', 'elearning', 'e-learning', 'tatap muka', 'uas', 'perkuliahan', 'minggu ini', 'hari ini']
         if any(keyword in user_prompt for keyword in jadwal_keywords):
+            await message.channel.typing()
             current_jadwal = get_current_jadwal()
             
             if current_jadwal:
-                response = "📚 **JADWAL KULIAH TERDEKAT** 📚\n"
-                response += f"*Berikut jadwal untuk minggu ini:*\n\n"
+                response = f"📚 **JADWAL KULIAH TERDEKAT** 📚\n"
+                response += f"Hai {message.author.mention}! Berikut jadwal kuliah untuk minggu ini:\n\n"
                 
                 for jadwal in current_jadwal:
                     response += f"```\n{jadwal['content']}\n```\n"
                 
                 response += "🎓 *Jangan lupa dipersiapkan!*"
-                await message.channel.send(response)
+                
+                if len(response) > 2000:
+                    parts = [response[i:i+2000] for i in range(0, len(response), 2000)]
+                    for part in parts:
+                        await message.channel.send(part)
+                else:
+                    await message.channel.send(response)
+                    
+                print(f"📚 [JADWAL] Sent jadwal to {message.author.name}")
+                return 
             else:
-                await message.channel.send("📚 Tidak ada jadwal kuliah dalam 7 hari ke depan. Coba tanya lagi minggu depan!")
-            return
-
+                await message.channel.send(f"{message.author.mention} 📚 Tidak ada jadwal kuliah dalam 7 hari ke depan. Coba tanya lagi minggu depan!")
+                return 
+            
     # 🖼️ OCR HANDLER
     if message.attachments:
         for attachment in message.attachments:
@@ -485,7 +511,7 @@ async def on_message(message: discord.Message):
                     await message.channel.send("❌ Gagal memproses gambar. Coba lagi nanti.")
                 return
 
-    # Handle Mention Reguler (AI)
+    # 🤖 Handle Mention Reguler
     if bot.user.mentioned_in(message) and not message.mention_everyone:
         user_prompt = message.content.replace(f"<@{bot.user.id}>", "").replace(f"<@!{bot.user.id}>", "").strip()
         if not user_prompt:
