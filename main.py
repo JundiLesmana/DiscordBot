@@ -355,22 +355,32 @@ async def friday_reminder():
                     except:
                         continue
 
-# 🖼️ OCR HANDLER (BARU - MENGGUNAKAN GEMINI)
+# 🖼️ OCR HANDLER
 async def handle_ocr_attachment(attachment, user_id: int):
-    """Handle OCR processing dengan Gemini."""
+    """Handle OCR processing dengan Gemini: unduh gambar, kirim sebagai bytes."""
     try:
-        if attachment.size > 5_000_000: 
-            return "❌ File terlalu besar (max 5MB untuk Gemini)."
+        if attachment.size > 5_000_000:  # 5MB
+            return "❌ File terlalu besar (max 5MB)."
         image_url = attachment.url
+        headers = {
+            "Authorization": f"Bot {DISCORD_TOKEN}" 
+        }
+        async with aiohttp.ClientSession() as session:
+            async with session.get(image_url, headers=headers, timeout=10) as resp:
+                if resp.status != 200:
+                    return f"❌ Gagal mengunduh gambar. Status: {resp.status}"
+                image_bytes = await resp.read()
+
+        if len(image_bytes) == 0:
+            return "❌ Gambar kosong."
         ocr_prompt = "Tolong ekstrak semua teks yang terlihat di gambar ini. Jika ada bagian yang tidak bisa dibaca atau tidak ada teks, beri tahu saya."
-        ocr_result = await ai_bot_service.get_response(ocr_prompt, user_id, image_url=image_url)
-
+        ocr_result = await ai_bot_service.get_response(ocr_prompt, user_id, image_bytes=image_bytes)
         return f"📄 **Hasil OCR dari Gambar:**\n{ocr_result}"
-
+    except asyncio.TimeoutError:
+        return "❌ Timeout saat mengunduh gambar. Coba lagi nanti."
     except Exception as e:
         logging.error(f"OCR attachment error: {e}")
-        return f"❌ Gagal memproses gambar untuk OCR: {str(e)}"
-
+        return f"❌ Gagal memproses gambar. Coba lagi nanti."
 
 @bot.event
 async def on_ready():
@@ -440,7 +450,6 @@ async def on_message(message: discord.Message):
             if any(attachment.filename.lower().endswith(ext) for ext in [".png", ".jpg", ".jpeg", ".pdf"]):
                 try:
                     await message.channel.typing()
-                    # Panggil fungsi OCR baru yang menggunakan Gemini
                     ocr_result = await handle_ocr_attachment(attachment, message.author.id)
                     await message.channel.send(ocr_result)
                     
