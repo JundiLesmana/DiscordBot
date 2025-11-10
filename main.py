@@ -10,7 +10,7 @@ import aiohttp
 from flask import Flask
 from threading import Thread
 from typing import Dict, List, Optional
-from ai_bot_service import ai_bot_service
+from ai_bot_service import ai_bot_service  # Pastikan ini mengimpor instance yang benar
 import re  
 
 print("✅ [DEBUG] Starting Techfour Bot...")
@@ -46,7 +46,7 @@ logging.info("=== Bot dimulai fresh ===")
 load_dotenv()
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")
-OCR_API_KEY = os.getenv("OCR_API_KEY")
+# OCR_API_KEY = os.getenv("OCR_API_KEY") # Tidak digunakan lagi
 
 if not DISCORD_TOKEN:
     raise ValueError("❌ Pastikan DISCORD_TOKEN sudah diisi di file .env")
@@ -66,8 +66,13 @@ class RateLimiter:
         self.user_cooldowns: Dict[int, float] = {}
         self.user_daily_usage: Dict[int, int] = {}
         self.last_reset_time: float = py_time.time()
-        self.active_ai_requests: int = 0
-        self.ai_request_lock = asyncio.Lock()
+        self.DAILY_RESET_INTERVAL = 24 * 60 * 60  # 24 jam dalam detik
+
+    def check_reset(self):
+        """Cek dan reset limit harian jika waktunya tiba."""
+        current_time = py_time.time()
+        if current_time - self.last_reset_time >= self.DAILY_RESET_INTERVAL:
+            self.reset_daily_limits()
 
     def reset_daily_limits(self):
         self.user_daily_usage.clear()
@@ -75,32 +80,32 @@ class RateLimiter:
         logging.info("Daily limits reset")
 
     def get_daily_limit(self, is_admin: bool) -> int:
-        return 50 if is_admin else 30
+        return 10 if is_admin else 5
 
     async def can_use_ai(self, user_id: int, is_admin: bool) -> tuple[bool, Optional[str]]:
+        self.check_reset() # Periksa reset sebelum cek limit
+        
         current_time = py_time.time()
         daily_limit = self.get_daily_limit(is_admin)
-        async with self.ai_request_lock:
-            if self.active_ai_requests >= 2:
-                return False, "⏳ Sedang ada 2 orang menggunakan AI. Tunggu 5 detik ya!"
-            if user_id in self.user_cooldowns:
-                time_since_last = current_time - self.user_cooldowns[user_id]
-                if time_since_last < 15:
-                    return False, f"⏳ Tunggu {int(15 - time_since_last)} detik lagi sebelum menggunakan AI."
-            daily_count = self.user_daily_usage.get(user_id, 0)
-            if daily_count >= daily_limit:
-                return False, f"🚫 Limit harianmu sudah habis ({daily_count}/{daily_limit}). Reset dalam 24 jam."
-            return True, None
+        
+        # Cek cooldown 60 detik
+        if user_id in self.user_cooldowns:
+            time_since_last = current_time - self.user_cooldowns[user_id]
+            if time_since_last < 60:
+                return False, f"⏳ Tunggu {int(60 - time_since_last)} detik lagi sebelum menggunakan AI."
 
-    async def start_ai_request(self, user_id: int):
-        async with self.ai_request_lock:
-            self.active_ai_requests += 1
+        # Cek limit harian
+        daily_count = self.user_daily_usage.get(user_id, 0)
+        if daily_count >= daily_limit:
+            return False, f"🚫 Limit harianmu sudah habis ({daily_count}/{daily_limit}). Reset dalam 24 jam."
+
+        return True, None
+
+    async def record_ai_request(self, user_id: int):
+        """Catat penggunaan AI oleh user."""
         self.user_cooldowns[user_id] = py_time.time()
         self.user_daily_usage[user_id] = self.user_daily_usage.get(user_id, 0) + 1
 
-    async def end_ai_request(self):
-        async with self.ai_request_lock:
-            self.active_ai_requests -= 1
 
 rate_limiter = RateLimiter()
 
@@ -167,7 +172,7 @@ class WebhookLogger:
 
 webhook_logger = WebhookLogger(WEBHOOK_URL)
 
-# 🎓 JADWAL KULIAH SYSTEM - ✅ FITUR BARU
+# 🎓 JADWAL KULIAH SYSTEM 
 WIB = timezone(timedelta(hours=7))
 
 def parse_jadwal_file():
@@ -249,7 +254,6 @@ def parse_jadwal_file():
 def extract_start_date(date_range):
     """Ekstrak tanggal mulai dari range tanggal"""
     try:
-        # Hilangkan tahun dan ambil bagian tanggal pertama
         date_part = re.split(r'[-–]', date_range)[0].strip()
         
         # Ekstrak angka tanggal
@@ -274,7 +278,7 @@ def extract_start_date(date_range):
 
 def get_current_jadwal():
     """Dapatkan jadwal yang sesuai dengan tanggal sekarang"""
-    now_wib = datetime.now(WIB).replace(tzinfo=None)  # ✅ HAPUS TIMEZONE UNTUK PERBANDINGAN
+    now_wib = datetime.now(WIB).replace(tzinfo=None)
     jadwal_data = parse_jadwal_file()
     
     current_jadwal = []
@@ -332,7 +336,7 @@ async def daily_jadwal_reminder():
     else:
         print(f"🔔 [JADWAL] No upcoming jadwal for {now_wib.strftime('%Y-%m-%d')}")
 
-# ✅ FRIDAY REMINDER (YANG SUDAH ADA)
+# ✅ FRIDAY REMINDER 
 @tasks.loop(time=time(hour=11, minute=0))
 async def friday_reminder():
     now_utc = datetime.now(timezone.utc)
@@ -351,80 +355,22 @@ async def friday_reminder():
                     except:
                         continue
 
-# ✅ FRIDAY REMINDER
-@tasks.loop(time=time(hour=11, minute=0))
-async def friday_reminder():
-    now_utc = datetime.now(timezone.utc)
-    now_wib = now_utc.astimezone(WIB)
-    if now_wib.weekday() == 4:  # 4 = Friday
-        message = (
-            "Hai @everyone jangan lupa tugas E-learning, tulis tangan, dan lain sebagainya "
-            "dikerjakan yah. Besok jam 07:40 kita masuk kelas. Semangat 💪"
-        )
-        for guild in bot.guilds:
-            for channel in guild.text_channels:
-                if channel.permissions_for(guild.me).send_messages:
-                    try:
-                        await channel.send(message)
-                        break
-                    except:
-                        continue
-
-# 🖼️ OCR HANDLER
-async def handle_ocr_attachment(attachment):
-    """Handle OCR processing dengan error handling yang lebih baik"""
+# 🖼️ OCR HANDLER (BARU - MENGGUNAKAN GEMINI)
+async def handle_ocr_attachment(attachment, user_id: int):
+    """Handle OCR processing dengan Gemini."""
     try:
-        import requests
-        
-        if not OCR_API_KEY:
-            return "❌ OCR tidak tersedia: API key belum dikonfigurasi."
+        if attachment.size > 5_000_000: 
+            return "❌ File terlalu besar (max 5MB untuk Gemini)."
+        image_url = attachment.url
+        ocr_prompt = "Tolong ekstrak semua teks yang terlihat di gambar ini. Jika ada bagian yang tidak bisa dibaca atau tidak ada teks, beri tahu saya."
+        ocr_result = await ai_bot_service.get_response(ocr_prompt, user_id, image_url=image_url)
 
-        # Validasi file size
-        if attachment.size > 10_000_000:  # 10MB limit
-            return "❌ File terlalu besar (max 10MB)."
+        return f"📄 **Hasil OCR dari Gambar:**\n{ocr_result}"
 
-        ocr_url = "https://api.ocr.space/parse/image"
-        
-        # Download attachment
-        file_data = await attachment.read()
-        
-        response = requests.post(
-            ocr_url,
-            data={
-                "apikey": OCR_API_KEY,
-                "OCREngine": 2,
-                "language": "eng",
-                "scale": "true",
-                "isTable": "true"
-            },
-            files={"file": (attachment.filename, file_data, attachment.content_type)},
-            timeout=30
-        )
-        
-        if response.status_code == 200:
-            result = response.json()
-            if result.get("IsSuccessful", False):
-                parsed_results = result.get("ParsedResults", [])
-                if parsed_results:
-                    parsed_text = parsed_results[0].get("ParsedText", "").strip()
-                    if parsed_text:
-                        return f"📄 **Hasil OCR:**\n{parsed_text[:1500]}"
-                    else:
-                        return "❌ Teks terdeteksi, tetapi kosong."
-                else:
-                    return "❌ Tidak ada teks yang ditemukan di gambar."
-            else:
-                error_msg = result.get("ErrorMessage", "Unknown error")
-                return f"❌ OCR Error: {error_msg}"
-        else:
-            return f"❌ OCR API Error: Status {response.status_code}"
-            
-    except requests.exceptions.Timeout:
-        return "❌ OCR timeout - coba lagi nanti."
-    except requests.exceptions.RequestException as e:
-        return f"❌ Network error: {e}"
     except Exception as e:
-        return f"❌ OCR processing error: {str(e)}"
+        logging.error(f"OCR attachment error: {e}")
+        return f"❌ Gagal memproses gambar untuk OCR: {str(e)}"
+
 
 @bot.event
 async def on_ready():
@@ -445,7 +391,7 @@ async def on_message(message: discord.Message):
 
     activity_tracker.update_activity(message.author.id)
 
-    # 🔕 Censor kata kasar
+    # sensor kata kasar
     TOXIC_KEYWORDS = ["kontol", "memek", "bangsat", "ngentod"]
     if any(k in message.content.lower() for k in TOXIC_KEYWORDS):
         try:
@@ -494,17 +440,18 @@ async def on_message(message: discord.Message):
             if any(attachment.filename.lower().endswith(ext) for ext in [".png", ".jpg", ".jpeg", ".pdf"]):
                 try:
                     await message.channel.typing()
-                    ocr_result = await handle_ocr_attachment(attachment)
+                    # Panggil fungsi OCR baru yang menggunakan Gemini
+                    ocr_result = await handle_ocr_attachment(attachment, message.author.id)
                     await message.channel.send(ocr_result)
                     
-                    # Jika OCR berhasil, proses dengan AI
-                    if "**Hasil OCR:**" in ocr_result:
+                    if "**Hasil OCR dari Gambar:**" in ocr_result and not ocr_result.startswith("❌"):
+                        ai_prompt = f"Berikut adalah teks yang diekstrak dari gambar: {ocr_result}\n\nApa yang bisa kamu bantu dengan teks ini?"
                         try:
-                            reply = await ai_bot_service.get_response(ocr_result, message.author.id)
+                            reply = await ai_bot_service.get_response(ai_prompt, message.author.id)
                             await message.channel.send(reply[:2000])
                         except Exception as e:
                             logging.error(f"AI processing error after OCR: {e}")
-                            await message.channel.send("🤖 Berhasil membaca gambar, tapi AI sedang sibuk.")
+                            await message.channel.send("🤖 Berhasil membaca gambar, tapi AI sedang sibuk memproses permintaan lanjutan.")
                     
                 except Exception as e:
                     logging.error(f"OCR attachment error: {e}")
@@ -526,14 +473,13 @@ async def on_message(message: discord.Message):
 
         await message.channel.typing()
         try:
-            await rate_limiter.start_ai_request(message.author.id)
+            # Record the request before processing
+            await rate_limiter.record_ai_request(message.author.id)
             reply = await ai_bot_service.get_response(user_prompt, message.author.id)
             await message.channel.send(reply[:2000])
         except Exception as e:
             logging.exception(f"Error processing AI request: {e}")
             await message.channel.send(f"{message.author.mention} 🤖 Maaf, terjadi error.")
-        finally:
-            await rate_limiter.end_ai_request()
         return
 
     await bot.process_commands(message)
