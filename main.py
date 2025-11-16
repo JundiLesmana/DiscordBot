@@ -7,30 +7,27 @@ import asyncio
 from datetime import datetime, timedelta, time, timezone
 from dotenv import load_dotenv
 import aiohttp
-from flask import Flask
-from threading import Thread
 from typing import Dict, List, Optional
-from ai_bot_service import ai_bot_service  # Pastikan ini mengimpor instance yang benar
-import re  
+from ai_bot_service import ai_bot_service
+import re
+import threading
+from aiohttp import web
 
 print("✅ [DEBUG] Starting Techfour Bot...")
 
-app = Flask('')
+async def health(request):
+    return web.Response(text="OK")
 
-@app.route('/')
-def home():
-    return "🤖 Techfour Bot is Alive! Powered by JundiLesmana"
-
-def run_webserver():
+def start_webserver():
+    app = web.Application()
+    app.router.add_get('/', health)
     port = int(os.environ.get("PORT", 8080))
-    app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
+    web.run_app(app, host="0.0.0.0", port=port)
 
-def keep_alive():
-    t = Thread(target=run_webserver)
-    t.daemon = True
-    t.start()
+threading.Thread(target=start_webserver, daemon=True).start()
 
-# 📊 LOGGING SETUP (safe for c
+# LOGGING SETUP
+
 logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(message)s",
     level=logging.INFO,
@@ -38,16 +35,14 @@ logging.basicConfig(
 
 logging.info("=== Bot dimulai fresh ===")
 
-# 🔐 ENVIRONMENT VARIABLES
+#ENV VARIABLES
 load_dotenv()
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")
-# OCR_API_KEY = os.getenv("OCR_API_KEY") # Tidak digunakan lagi
 
 if not DISCORD_TOKEN:
-    raise ValueError("❌ Pastikan DISCORD_TOKEN sudah diisi di file .env")
+    raise ValueError("❌ Pastikan DISCORD_TOKEN sudah diisi!")
 
-# 🤖 BOT SETUP
 intents = discord.Intents.default()
 intents.message_content = True
 intents.members = True
