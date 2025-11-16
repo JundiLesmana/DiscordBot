@@ -17,17 +17,20 @@ print("🚀 Starting Techfour Bot")
 
 # HEALTHCHECK SERVER
 async def start_webserver():
-    """Webserver yang berjalan di asyncio-task, bukan thread."""
+    """Webserver dengan endpoint yang benar"""
     async def health(req):
         return web.Response(text="OK")
-
-    async def heath2(req):
+    
+    async def health_check(req):
         return web.Response(text="OK")
 
     port = int(os.getenv("PORT", 8080))
     app = web.Application()
+    
     app.router.add_get("/", health)
-    app.router.add_get("/kaithhealthcheck", heath2)
+    app.router.add_get("/health", health)
+    app.router.add_get("/kaithhealthcheck", health)
+    app.router.add_get("/healthcheck", health)
 
     runner = web.AppRunner(app)
     await runner.setup()
@@ -36,6 +39,7 @@ async def start_webserver():
     await site.start()
 
     print(f"🌐 Healthcheck server running on port {port}")
+    print("✅ Endpoints: /, /health, /kaithhealthcheck, /healthcheck")
 
 # LOGGING
 logging.basicConfig(
