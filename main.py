@@ -8,41 +8,53 @@ from datetime import datetime, timedelta, time, timezone
 from dotenv import load_dotenv
 import aiohttp
 from typing import Dict, List, Optional
-from ai_bot_service import ai_bot_service
 import re
-import threading
+
+from ai_bot_service import ai_bot_service
+
 from aiohttp import web
 
-print("✅ [DEBUG] Starting Techfour Bot...")
 
-async def health(request):
-    return web.Response(text="OK")
+print("🚀 Starting Techfour Bot")
+# HEALTHCHECK SERVER
+async def start_webserver():
+    """Webserver yang berjalan di asyncio-task, bukan thread."""
+    async def health(req):
+        return web.Response(text="OK")
 
-def start_webserver():
+    async def heath2(req):
+        return web.Response(text="OK")
+
+    port = int(os.getenv("PORT", 8080))
     app = web.Application()
-    app.router.add_get('/', health)
-    port = int(os.environ.get("PORT", 8080))
-    web.run_app(app, host="0.0.0.0", port=port)
+    app.router.add_get("/", health)
+    app.router.add_get("/kaithhealthcheck", heath2)
 
-threading.Thread(target=start_webserver, daemon=True).start()
+    runner = web.AppRunner(app)
+    await runner.setup()
 
-# LOGGING SETUP
+    site = web.TCPSite(runner, "0.0.0.0", port)
+    await site.start()
 
+    print(f"🌐 Healthcheck server running on port {port}")
+
+# LOGGING
 logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(message)s",
     level=logging.INFO,
 )
 
-logging.info("=== Bot dimulai fresh ===")
+logging.info("=== Techfour Bot Started ===")
 
-#ENV VARIABLES
+# ENVIRONMENT
 load_dotenv()
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 
 if not DISCORD_TOKEN:
-    raise ValueError("❌ Pastikan DISCORD_TOKEN sudah diisi!")
+    raise ValueError("❌ Missing DISCORD_TOKEN")
 
+# BOT SETUP
 intents = discord.Intents.default()
 intents.message_content = True
 intents.members = True
@@ -51,82 +63,61 @@ intents.presences = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# 📈 RATE LIMITER
+
+# RATE LIMITER
 class RateLimiter:
     def __init__(self):
         self.user_cooldowns: Dict[int, float] = {}
         self.user_daily_usage: Dict[int, int] = {}
         self.last_reset_time: float = py_time.time()
-        self.DAILY_RESET_INTERVAL = 24 * 60 * 60  # 24 jam dalam detik
+        self.DAILY_RESET_INTERVAL = 24 * 60 * 60
 
     def check_reset(self):
-        """Cek dan reset limit harian jika waktunya tiba."""
-        current_time = py_time.time()
-        if current_time - self.last_reset_time >= self.DAILY_RESET_INTERVAL:
-            self.reset_daily_limits()
+        now = py_time.time()
+        if now - self.last_reset_time >= self.DAILY_RESET_INTERVAL:
+            self.user_daily_usage.clear()
+            self.last_reset_time = now
 
-    def reset_daily_limits(self):
-        self.user_daily_usage.clear()
-        self.last_reset_time = py_time.time()
-        logging.info("Daily limits reset")
+    def get_daily_limit(self, admin):
+        return 10 if admin else 5
 
-    def get_daily_limit(self, is_admin: bool) -> int:
-        return 10 if is_admin else 5
+    async def can_use_ai(self, user_id, admin):
+        self.check_reset()
 
-    async def can_use_ai(self, user_id: int, is_admin: bool) -> tuple[bool, Optional[str]]:
-        self.check_reset() # Periksa reset sebelum cek limit
-        
-        current_time = py_time.time()
-        daily_limit = self.get_daily_limit(is_admin)
-        
-        # Cek cooldown 60 detik
+        now = py_time.time()
+
+        # cooldown
         if user_id in self.user_cooldowns:
-            time_since_last = current_time - self.user_cooldowns[user_id]
-            if time_since_last < 60:
-                return False, f"⏳ Tunggu {int(60 - time_since_last)} detik lagi sebelum menggunakan AI."
+            diff = now - self.user_cooldowns[user_id]
+            if diff < 60:
+                return False, f"⏳ Tunggu {int(60-diff)} detik sebelum menggunakan AI lagi."
 
-        # Cek limit harian
-        daily_count = self.user_daily_usage.get(user_id, 0)
-        if daily_count >= daily_limit:
-            return False, f"🚫 Limit harianmu sudah habis ({daily_count}/{daily_limit}). Reset dalam 24 jam."
+        # daily limit
+        used = self.user_daily_usage.get(user_id, 0)
+        limit = self.get_daily_limit(admin)
+        if used >= limit:
+            return False, f"🚫 Limit {used}/{limit} habis. Reset 24 jam."
 
         return True, None
 
-    async def record_ai_request(self, user_id: int):
-        """Catat penggunaan AI oleh user."""
+    async def record(self, user_id):
         self.user_cooldowns[user_id] = py_time.time()
         self.user_daily_usage[user_id] = self.user_daily_usage.get(user_id, 0) + 1
 
-
 rate_limiter = RateLimiter()
 
-# 🕓 ACTIVITY TRACKER
+# ACTIVITY TRACKER
 class ActivityTracker:
     def __init__(self):
-        self.last_activity: Dict[int, datetime] = {}
+        self.last_activity = {}
 
-    def update_activity(self, user_id: int):
-        self.last_activity[user_id] = datetime.now()
-
-    def get_inactive_members(self, guild: discord.Guild, days_threshold: int = 3) -> List[discord.Member]:
-        inactive_members = []
-        now = datetime.now()
-        for member in guild.members:
-            if member.bot:
-                continue
-            user_id = member.id
-            if user_id not in self.last_activity:
-                self.last_activity[user_id] = now
-                continue
-            last_active = self.last_activity[user_id]
-            days_inactive = (now - last_active).days
-            if days_inactive >= days_threshold:
-                inactive_members.append((member, days_inactive))
-        return inactive_members
+    def update_activity(self, uid):
+        self.last_activity[uid] = datetime.now()
 
 activity_tracker = ActivityTracker()
 
-def is_admin(member: discord.Member) -> bool:
+
+def is_admin(member: discord.Member):
     if member.guild.owner_id == member.id:
         return True
     for role in member.roles:
@@ -134,36 +125,31 @@ def is_admin(member: discord.Member) -> bool:
             return True
     return False
 
-# 🔗 WEBHOOK LOGGER
+# WEBHOOK LOGGER
 class WebhookLogger:
-    def __init__(self, webhook_url: str):
-        self.webhook_url = webhook_url
-        self.session: Optional[aiohttp.ClientSession] = None
+    def __init__(self, url):
+        self.url = url
+        self.session = None
 
-    async def get_session(self):
-        if self.session is None:
+    async def _session(self):
+        if not self.session:
             self.session = aiohttp.ClientSession()
         return self.session
 
-    async def close_session(self):
-        if self.session:
-            await self.session.close()
-            self.session = None
-
-    async def send_log(self, content: str):
-        if not self.webhook_url:
+    async def send(self, content):
+        if not self.url:
             return
+        ses = await self._session()
         try:
-            session = await self.get_session()
-            async with session.post(self.webhook_url, json={"content": content}) as response:
-                if response.status != 204:
-                    logging.error(f"Webhook error: {response.status}")
+            async with ses.post(self.url, json={"content": content}) as r:
+                if r.status != 204:
+                    logging.error(f"Webhook error: {r.status}")
         except Exception as e:
-            logging.error(f"Webhook send error: {e}")
+            logging.error(f"Webhook send failed: {e}")
 
 webhook_logger = WebhookLogger(WEBHOOK_URL)
 
-# 🎓 JADWAL KULIAH SYSTEM 
+# JADWAL KULIAH SYSTEM 
 WIB = timezone(timedelta(hours=7))
 
 def parse_jadwal_file():
@@ -327,7 +313,7 @@ async def daily_jadwal_reminder():
     else:
         print(f"🔔 [JADWAL] No upcoming jadwal for {now_wib.strftime('%Y-%m-%d')}")
 
-# ✅ FRIDAY REMINDER 
+# FRIDAY REMINDER 
 @tasks.loop(time=time(hour=11, minute=0))
 async def friday_reminder():
     now_utc = datetime.now(timezone.utc)
@@ -346,7 +332,7 @@ async def friday_reminder():
                     except:
                         continue
 
-# 🖼️ OCR HANDLER
+# OCR HANDLER
 async def handle_ocr_attachment(attachment, user_id: int):
     """Handle OCR processing dengan Gemini: unduh gambar, kirim sebagai bytes."""
     try:
@@ -434,59 +420,98 @@ async def on_message(message: discord.Message):
                 await message.channel.send(f"{message.author.mention} 📚 Tidak ada jadwal kuliah dalam 7 hari ke depan. Coba tanya lagi minggu depan!")
                 return 
             
-    # 🖼️ OCR HANDLER
-    if message.attachments:
-        for attachment in message.attachments:
-            if any(attachment.filename.lower().endswith(ext) for ext in [".png", ".jpg", ".jpeg", ".pdf"]):
-                try:
-                    await message.channel.typing()
-                    ocr_result = await handle_ocr_attachment(attachment, message.author.id)
-                    await message.channel.send(ocr_result)
-                    
-                    if "**Hasil OCR dari Gambar:**" in ocr_result and not ocr_result.startswith("❌"):
-                        ai_prompt = f"Berikut adalah teks yang diekstrak dari gambar: {ocr_result}\n\nApa yang bisa kamu bantu dengan teks ini?"
-                        try:
-                            reply = await ai_bot_service.get_response(ai_prompt, message.author.id)
-                            await message.channel.send(reply[:2000])
-                        except Exception as e:
-                            logging.error(f"AI processing error after OCR: {e}")
-                            await message.channel.send("🤖 Berhasil membaca gambar, tapi AI sedang sibuk memproses permintaan lanjutan.")
-                    
-                except Exception as e:
-                    logging.error(f"OCR attachment error: {e}")
-                    await message.channel.send("❌ Gagal memproses gambar. Coba lagi nanti.")
-                return
+# OCR HANDLER
+async def handle_ocr_attachment(attachment, uid):
+    try:
+        if attachment.size > 5_000_000:
+            return "❌ File > 5MB."
 
-    # 🤖 Handle Mention Reguler
-    if bot.user.mentioned_in(message) and not message.mention_everyone:
-        user_prompt = message.content.replace(f"<@{bot.user.id}>", "").replace(f"<@!{bot.user.id}>", "").strip()
-        if not user_prompt:
-            await message.channel.send(f"Halo {message.author.mention}! Ketik pesan setelah mention saya 🤖")
-            return
+        headers = {"Authorization": f"Bot {DISCORD_TOKEN}"}
+        async with aiohttp.ClientSession() as ses:
+            async with ses.get(attachment.url, headers=headers) as r:
+                if r.status != 200:
+                    return f"❌ Gagal download ({r.status})"
+                img = await r.read()
 
-        user_is_admin = is_admin(message.author)
-        can_request, err = await rate_limiter.can_use_ai(message.author.id, user_is_admin)
-        if not can_request:
-            await message.channel.send(err)
-            return
+        if not img:
+            return "❌ Gambar kosong."
 
-        await message.channel.typing()
-        try:
-            # Record the request before processing
-            await rate_limiter.record_ai_request(message.author.id)
-            reply = await ai_bot_service.get_response(user_prompt, message.author.id)
-            await message.channel.send(reply[:2000])
-        except Exception as e:
-            logging.exception(f"Error processing AI request: {e}")
-            await message.channel.send(f"{message.author.mention} 🤖 Maaf, terjadi error.")
+        text = await ai_bot_service.get_response(
+            "Extract all text from this image:", uid, image_bytes=img
+        )
+
+        return f"📄 **Hasil OCR:**\n{text}"
+
+    except Exception as e:
+        logging.error(e)
+        return "❌ Error OCR"
+
+
+# BOT EVENT HANDLERS
+@bot.event
+async def on_ready():
+    print(f"🎉 {bot.user} ONLINE")
+    print(f"📊 Connected to {len(bot.guilds)} servers")
+
+    # start tasks
+    friday_reminder.start()
+    daily_jadwal_reminder.start()
+
+    # start webserver (WAJIB LEAPCELL)
+    asyncio.create_task(start_webserver())
+
+    logging.info("Bot fully operational.")
+
+
+@bot.event
+async def on_message(msg):
+    if msg.author == bot.user:
         return
 
-    await bot.process_commands(message)
+    activity_tracker.update_activity(msg.author.id)
 
-# START BOT
+    # filter toxic
+    for word in ["kontol", "memek", "bangsat", "ngentod"]:
+        if word in msg.content.lower():
+            try:
+                await msg.delete()
+                await msg.channel.send(f"{msg.author.mention} jaga bahasanya ya 🙏")
+            except:
+                pass
+            return
+
+    # OCR
+    if msg.attachments:
+        for att in msg.attachments:
+            if att.filename.lower().endswith((".png", ".jpg", ".jpeg", ".pdf")):
+                await msg.channel.typing()
+                res = await handle_ocr_attachment(att, msg.author.id)
+                await msg.channel.send(res)
+                return
+
+    # Mention = AI
+    if bot.user.mentioned_in(msg) and not msg.mention_everyone:
+        prompt = (
+            msg.content.replace(f"<@{bot.user.id}>", "")
+            .replace(f"<@!{bot.user.id}>", "")
+            .strip()
+        )
+        if not prompt:
+            return await msg.channel.send("Halo! Ada yang bisa kubantu?")
+
+        admin = is_admin(msg.author)
+        ok, err = await rate_limiter.can_use_ai(msg.author.id, admin)
+        if not ok:
+            return await msg.channel.send(err)
+
+        await msg.channel.typing()
+        await rate_limiter.record(msg.author.id)
+        reply = await ai_bot_service.get_response(prompt, msg.author.id)
+        await msg.channel.send(reply[:2000])
+        return
+
+    await bot.process_commands(msg)
+
+
 if __name__ == "__main__":
-    try:
-        bot.run(DISCORD_TOKEN)
-    except Exception as e:
-        print(f"❌ Failed to start bot: {e}")
-        logging.critical(f"Bot startup failed: {e}")
+    bot.run(DISCORD_TOKEN)
