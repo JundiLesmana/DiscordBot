@@ -381,7 +381,6 @@ async def on_ready():
     # Start semua tasks
     friday_reminder.start()
     daily_jadwal_reminder.start()  
-    keep_alive()
     
     logging.info("Bot fully operational with jadwal system")
 
