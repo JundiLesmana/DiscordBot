@@ -30,16 +30,12 @@ def keep_alive():
     t.daemon = True
     t.start()
 
-# 📊 LOGGING SETUP
-if os.path.exists("discord.log"):
-    os.remove("discord.log")
-
+# 📊 LOGGING SETUP (safe for c
 logging.basicConfig(
-    filename="discord.log",
-    filemode="w",
     format="%(asctime)s - %(levelname)s - %(message)s",
     level=logging.INFO,
 )
+
 logging.info("=== Bot dimulai fresh ===")
 
 # 🔐 ENVIRONMENT VARIABLES
