@@ -189,6 +189,8 @@ def is_admin(member: discord.Member):
             return True
     return False
 
+# ... [kode lain tetap sama] ...
+
 # JADWAL KULIAH SYSTEM
 WIB = timezone(timedelta(hours=7))
 
@@ -198,8 +200,7 @@ def parse_jadwal_file():
         with open('JadwalKuliah.txt', 'r', encoding='utf-8') as file:
             content = file.read()
         # Gunakan regex untuk menangkap blok jadwal
-        # Pola: Tanggal awal - Tanggal akhir (dan info tambahan)
-        pattern = r'---+\n([E-Learning|Tatap Muka]+ \d{1,2}[a-zA-Z]* - \d{1,2}[a-zA-Z]* \d{4})\n(.*?)(?=---|$)'
+        pattern = r'---+\n([E-Learning|Tatap Muka]+ \d{1,2}[a-zA-Z]* - .*?\d{4})\n(.*?)(?=---|$)'
         matches = re.findall(pattern, content, re.DOTALL)
         jadwal_list = []
         for match in matches:
@@ -218,13 +219,12 @@ def get_jadwal_for_date(target_date_str: str):
     for jadwal in jadwal_list:
         header = jadwal['header']
         # Ekstrak tanggal awal dan akhir dari header
-        # Misal: "E-Learning 03November - 07November 2025"
-        # Misal: "Tatap muka 08November - Sabtu"
         dates_part = header.split(" - ")
         if len(dates_part) < 2:
             continue
 
         start_date_str = dates_part[0].split(" ", 1)[1] # Ambil bagian setelah 'E-Learning' atau 'Tatap muka'
+        end_date_str = dates_part[1]
         # Ambil tahun dari bagian akhir header
         year_match = re.search(r'(\d{4})', header)
         year = year_match.group(1) if year_match else None
@@ -235,23 +235,39 @@ def get_jadwal_for_date(target_date_str: str):
             start_date = datetime.strptime(start_full, "%d%B %Y").date()
         except ValueError:
             try:
-                # Coba format tanpa tahun jika tahun ada di akhir
                 start_date = datetime.strptime(start_date_str, "%d%B").date().replace(year=int(year))
             except ValueError:
                 continue
 
         # Format tanggal akhir
-        end_date_str = dates_part[1]
-        # Hilangkan "Sabtu" atau hari lainnya jika ada
-        end_date_cleaned = re.sub(r'\s*-\s*\w+$', '', end_date_str)
-        try:
-            end_full = end_date_cleaned + (" " + year if year else "")
-            end_date = datetime.strptime(end_full, "%d%B %Y").date()
-        except ValueError:
+        # Cek apakah akhirnya adalah hari (Sabtu, Minggu, dll)
+        if re.match(r'^[A-Za-z]+$', end_date_str.strip()):
+            # Jika akhirnya adalah hari, kita cari hari tersebut dalam minggu yang sama dengan start_date
+            day_name = end_date_str.strip()
+            # Konversi nama hari ke angka (Senin=0, Selasa=1, ..., Minggu=6)
+            day_map = {
+                'Senin': 0, 'Selasa': 1, 'Rabu': 2, 'Kamis': 3, 'Jumat': 4,
+                'Sabtu': 5, 'Minggu': 6
+            }
+            target_day = day_map.get(day_name.capitalize())
+            if target_day is not None:
+                # Hitung selisih hari
+                days_diff = (target_day - start_date.weekday()) % 7
+                if days_diff == 0:
+                    days_diff = 7 # Jika hari sama, maka satu minggu penuh
+                end_date = start_date + timedelta(days=days_diff)
+            else:
+                continue # Tidak bisa konversi hari
+        else:
+            # Jika bukan hari, proses sebagai tanggal
             try:
-                end_date = datetime.strptime(end_date_cleaned, "%d%B").date().replace(year=int(year))
+                end_full = end_date_str + (" " + year if year else "")
+                end_date = datetime.strptime(end_full, "%d%B %Y").date()
             except ValueError:
-                continue
+                try:
+                    end_date = datetime.strptime(end_date_str, "%d%B").date().replace(year=int(year))
+                except ValueError:
+                    continue
 
         if start_date <= target_date <= end_date:
             return jadwal
