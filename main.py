@@ -9,8 +9,8 @@ from dotenv import load_dotenv
 import aiohttp
 from typing import Dict, List, Optional
 import re
-import threading
-from http.server import HTTPServer, BaseHTTPRequestHandler
+#import threading
+#from http.server import HTTPServer, BaseHTTPRequestHandler
 import json # Tambahkan untuk parsing JSON
 
 try:
@@ -41,7 +41,7 @@ class HealthHandler(BaseHTTPRequestHandler):
 
 def run_health_server():
     """Jalankan health server di thread terpisah"""
-    port = int(os.getenv("PORT", 8080))
+    port = 8080
     server = HTTPServer(('0.0.0.0', port), HealthHandler)
     print(f"🌐 Health server running on port {port}")
     try:
@@ -50,8 +50,8 @@ def run_health_server():
         print(f"❌ Health server error: {e}")
 
 # Start health server di background thread
-health_thread = threading.Thread(target=run_health_server, daemon=True)
-health_thread.start()
+#health_thread = threading.Thread(target=run_health_server, daemon=True)
+#health_thread.start()
 
 # LOGGING - SETUP LEBIH DETAIL
 logging.basicConfig(
