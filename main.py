@@ -4,7 +4,7 @@ import logging
 import os
 import time as py_time
 import asyncio
-from datetime import datetime, timedelta, time, timezone
+from datetime import datetime, timedelta, time as dt_time, timezone
 from dotenv import load_dotenv
 import aiohttp
 from typing import Dict, List, Optional
@@ -284,7 +284,7 @@ def get_current_jadwal():
     return get_jadwal_for_date(today_str)
 
 # BACKGROUND TASKS
-@tasks.loop(time=time(hour=8, minute=0, tzinfo=WIB)) # Gunakan timezone WIB
+@tasks.loop(time=dt_time(hour=8, minute=0, tzinfo=WIB)) # Daily at 8 AM WIB
 async def daily_jadwal_reminder():
     print("🔔 Daily jadwal reminder check")
     guild = bot.guilds[0] if bot.guilds else None
