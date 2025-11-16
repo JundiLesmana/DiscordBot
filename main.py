@@ -11,6 +11,7 @@ from typing import Dict, List, Optional
 import re
 import threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
+import json # Tambahkan untuk parsing JSON
 
 try:
     from ai_bot_service import ai_bot_service
@@ -34,7 +35,7 @@ class HealthHandler(BaseHTTPRequestHandler):
         else:
             self.send_response(404)
             self.end_headers()
-    
+
     def log_message(self, format, *args):
         pass
 
@@ -99,7 +100,7 @@ class MyBot(commands.Bot):
     async def on_ready(self):
         print(f'🎉 {self.user} berhasil login dan ONLINE!')
         print(f'📊 Connected to {len(self.guilds)} guilds')
-        
+
         # Set status bot
         await self.change_presence(
             activity=discord.Activity(
@@ -107,15 +108,16 @@ class MyBot(commands.Bot):
                 name="!help | Mentions"
             )
         )
-        
+
         # Start background tasks
         try:
-            friday_reminder.start()
+            # Hapus atau nonaktifkan friday_reminder jika tidak digunakan
+            # friday_reminder.start()
             daily_jadwal_reminder.start()
             print("✅ Background tasks started")
         except Exception as e:
             print(f"⚠️ Error starting tasks: {e}")
-        
+
         logger.info(f"Bot {self.user} fully operational")
 
     async def on_connect(self):
@@ -187,56 +189,135 @@ def is_admin(member: discord.Member):
             return True
     return False
 
-# JADWAL KULIAH SYSTEM (Simplified untuk testing)
+# JADWAL KULIAH SYSTEM
 WIB = timezone(timedelta(hours=7))
 
 def parse_jadwal_file():
-    """Parse file JadwalKuliah.txt"""
+    """Parse file JadwalKuliah.txt menjadi struktur data"""
     try:
         with open('JadwalKuliah.txt', 'r', encoding='utf-8') as file:
             content = file.read()
-        return [{"type": "E-Learning", "content": content[:200] + "..."}]
+        # Gunakan regex untuk menangkap blok jadwal
+        # Pola: Tanggal awal - Tanggal akhir (dan info tambahan)
+        pattern = r'---+\n([E-Learning|Tatap Muka]+ \d{1,2}[a-zA-Z]* - \d{1,2}[a-zA-Z]* \d{4})\n(.*?)(?=---|$)'
+        matches = re.findall(pattern, content, re.DOTALL)
+        jadwal_list = []
+        for match in matches:
+            header, detail = match
+            jadwal_list.append({"header": header.strip(), "content": detail.strip()})
+        return jadwal_list
     except FileNotFoundError:
-        return [{"type": "Info", "content": "File jadwal tidak ditemukan"}]
+        logger.error("File JadwalKuliah.txt tidak ditemukan")
+        return [{"header": "Error", "content": "File JadwalKuliah.txt tidak ditemukan"}]
+
+def get_jadwal_for_date(target_date_str: str):
+    """Mendapatkan jadwal berdasarkan tanggal tertentu (YYYY-MM-DD)"""
+    jadwal_list = parse_jadwal_file()
+    target_date = datetime.strptime(target_date_str, "%Y-%m-%d").date()
+
+    for jadwal in jadwal_list:
+        header = jadwal['header']
+        # Ekstrak tanggal awal dan akhir dari header
+        # Misal: "E-Learning 03November - 07November 2025"
+        # Misal: "Tatap muka 08November - Sabtu"
+        dates_part = header.split(" - ")
+        if len(dates_part) < 2:
+            continue
+
+        start_date_str = dates_part[0].split(" ", 1)[1] # Ambil bagian setelah 'E-Learning' atau 'Tatap muka'
+        # Ambil tahun dari bagian akhir header
+        year_match = re.search(r'(\d{4})', header)
+        year = year_match.group(1) if year_match else None
+
+        # Format tanggal awal
+        try:
+            start_full = start_date_str + (" " + year if year else "")
+            start_date = datetime.strptime(start_full, "%d%B %Y").date()
+        except ValueError:
+            try:
+                # Coba format tanpa tahun jika tahun ada di akhir
+                start_date = datetime.strptime(start_date_str, "%d%B").date().replace(year=int(year))
+            except ValueError:
+                continue
+
+        # Format tanggal akhir
+        end_date_str = dates_part[1]
+        # Hilangkan "Sabtu" atau hari lainnya jika ada
+        end_date_cleaned = re.sub(r'\s*-\s*\w+$', '', end_date_str)
+        try:
+            end_full = end_date_cleaned + (" " + year if year else "")
+            end_date = datetime.strptime(end_full, "%d%B %Y").date()
+        except ValueError:
+            try:
+                end_date = datetime.strptime(end_date_cleaned, "%d%B").date().replace(year=int(year))
+            except ValueError:
+                continue
+
+        if start_date <= target_date <= end_date:
+            return jadwal
+    return None
+
+def get_jadwal_tomorrow():
+    """Mendapatkan jadwal yang dimulai besok"""
+    tomorrow = datetime.now(WIB).date() + timedelta(days=1)
+    tomorrow_str = tomorrow.strftime("%Y-%m-%d")
+    return get_jadwal_for_date(tomorrow_str)
 
 def get_current_jadwal():
-    return parse_jadwal_file()
+    """Mendapatkan jadwal untuk hari ini"""
+    today_str = datetime.now(WIB).date().strftime("%Y-%m-%d")
+    return get_jadwal_for_date(today_str)
 
 # BACKGROUND TASKS
-@tasks.loop(time=time(hour=8, minute=0))
+@tasks.loop(time=time(hour=8, minute=0, tzinfo=WIB)) # Gunakan timezone WIB
 async def daily_jadwal_reminder():
     print("🔔 Daily jadwal reminder check")
+    guild = bot.guilds[0] if bot.guilds else None
+    if not guild:
+        print("❌ Tidak ada guild untuk mengirim reminder.")
+        return
 
-@tasks.loop(time=time(hour=11, minute=0))
-async def friday_reminder():
-    now_utc = datetime.now(timezone.utc)
-    now_wib = now_utc.astimezone(WIB)
-    if now_wib.weekday() == 4:
-        print("📅 Friday reminder triggered")
+    channel = guild.system_channel or guild.text_channels[0] # Gunakan system channel atau channel pertama
+    jadwal_tomorrow = get_jadwal_tomorrow()
 
-# OCR HANDLER
-async def handle_ocr_attachment(attachment, user_id: int):
+    if jadwal_tomorrow:
+        response = f"⏰ **Pengingat Jadwal Kuliah Besok ({jadwal_tomorrow['header']}):**\n\n```{jadwal_tomorrow['content']}```"
+        try:
+            await channel.send(response)
+            print("✅ Pengingat jadwal dikirim.")
+        except discord.Forbidden:
+            print("❌ Bot tidak memiliki izin untuk mengirim pesan di channel ini.")
+        except Exception as e:
+            print(f"❌ Gagal mengirim pengingat: {e}")
+    else:
+        print("✅ Tidak ada jadwal untuk besok.")
+
+# OCR HANDLER (Pindahkan ke dalam handler mention)
+async def handle_ocr_attachment(attachment, user_id: int, channel):
     try:
         if attachment.size > 5_000_000:
-            return "❌ File terlalu besar (max 5MB)."
-        
+            await channel.send("❌ File terlalu besar (max 5MB).")
+            return
+
         headers = {"Authorization": f"Bot {DISCORD_TOKEN}"}
         async with aiohttp.ClientSession() as session:
             async with session.get(attachment.url, headers=headers, timeout=10) as resp:
                 if resp.status != 200:
-                    return f"❌ Gagal mengunduh gambar. Status: {resp.status}"
+                    await channel.send(f"❌ Gagal mengunduh gambar. Status: {resp.status}")
+                    return
                 image_bytes = await resp.read()
 
+        await channel.typing()
         ocr_result = await ai_bot_service.get_response(
-            "Tolong ekstrak semua teks yang terlihat di gambar ini.", 
-            user_id, 
+            "Tolong ekstrak semua teks yang terlihat di gambar ini.", # Prompt default untuk OCR
+            user_id,
             image_bytes=image_bytes
         )
-        return f"📄 **Hasil OCR:**\n{ocr_result}"
-    
+        await channel.send(f"📄 **Hasil OCR:**\n{ocr_result}")
+
     except Exception as e:
         logger.error(f"OCR error: {e}")
-        return "❌ Gagal memproses gambar."
+        await channel.send("❌ Gagal memproses gambar.")
 
 # MESSAGE HANDLER
 @bot.event
@@ -256,35 +337,32 @@ async def on_message(msg):
             logger.error(f"Error deleting message: {e}")
         return
 
-    # OCR Handler
-    if msg.attachments:
-        for attachment in msg.attachments:
-            if attachment.filename.lower().endswith((".png", ".jpg", ".jpeg", ".pdf")):
-                await msg.channel.typing()
-                result = await handle_ocr_attachment(attachment, msg.author.id)
-                await msg.channel.send(result)
-                return
-
     # Handler untuk mention bot
     if bot.user.mentioned_in(msg) and not msg.mention_everyone:
         user_prompt = msg.content.replace(f"<@{bot.user.id}>", "").replace(f"<@!{bot.user.id}>", "").strip().lower()
-        
+
         # Cek jadwal kuliah
         jadwal_keywords = ['jadwal', 'kuliah', 'elearning', 'e-learning', 'tatap muka', 'uas']
         if any(keyword in user_prompt for keyword in jadwal_keywords):
             await msg.channel.typing()
             current_jadwal = get_current_jadwal()
-            
+
             if current_jadwal:
-                response = f"📚 **JADWAL KULIAH** 📚\nHai {msg.author.mention}!\n\n"
-                for jadwal in current_jadwal:
-                    response += f"```{jadwal['content']}```\n"
+                response = f"📚 **JADWAL KULIAH HARI INI ({current_jadwal['header']})** 📚\nHai {msg.author.mention}!\n\n```{current_jadwal['content']}```"
                 await msg.channel.send(response)
                 return
             else:
-                await msg.channel.send(f"{msg.author.mention} 📚 Tidak ada jadwal kuliah yang ditemukan.")
+                await msg.channel.send(f"{msg.author.mention} 📚 Tidak ada jadwal kuliah yang ditemukan untuk hari ini.")
                 return
-        
+
+        # Handler OCR (jika ada lampiran saat mention)
+        if msg.attachments:
+            for attachment in msg.attachments:
+                if attachment.filename.lower().endswith((".png", ".jpg", ".jpeg", ".pdf")):
+                    await handle_ocr_attachment(attachment, msg.author.id, msg.channel)
+                    return # Hentikan proses lebih lanjut jika OCR dijalankan
+            # Jika ada attachment tapi bukan gambar/pdf, lanjutkan ke AI
+
         # Handler AI biasa
         prompt = msg.content.replace(f"<@{bot.user.id}>", "").replace(f"<@!{bot.user.id}>", "").strip()
         if not prompt:
@@ -299,10 +377,11 @@ async def on_message(msg):
 
         await msg.channel.typing()
         await rate_limiter.record(msg.author.id)
-        reply = await ai_bot_service.get_response(prompt, msg.author.id)
+        reply = await ai_bot_service.get_response(prompt, msg.author.id, image_bytes=None) # Jika OCR tidak dijalankan, kirimkan None
         await msg.channel.send(reply[:2000])
         return
 
+    # Jika tidak mention, proses command biasa
     await bot.process_commands(msg)
 
 #Run bot error handling
@@ -318,7 +397,7 @@ if __name__ == "__main__":
         print("🤖 Starting Discord bot dengan token yang valid...")
         max_retries = 3
         retry_count = 0
-        
+
         while retry_count < max_retries:
             try:
                 bot.run(DISCORD_TOKEN)
@@ -335,6 +414,6 @@ if __name__ == "__main__":
                 break
             else:
                 break
-        
+
         if retry_count >= max_retries:
             print("❌ Gagal connect setelah beberapa percobaan")
