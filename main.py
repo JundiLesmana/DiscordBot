@@ -9,9 +9,9 @@ from dotenv import load_dotenv
 import aiohttp
 from typing import Dict, List, Optional
 import re
-#import threading
-#from http.server import HTTPServer, BaseHTTPRequestHandler
-import json # Tambahkan untuk parsing JSON
+import threading
+from http.server import HTTPServer, BaseHTTPRequestHandler
+import json 
 
 try:
     from ai_bot_service import ai_bot_service
@@ -24,11 +24,36 @@ except ImportError:
 
 print("🚀 Starting Techfour Bot")
 
-# Start health server di background thread
-#health_thread = threading.Thread(target=run_health_server, daemon=True)
-#health_thread.start()
+# HEALTH SERVER DI THREAD TERPISAH
+class HealthHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        if self.path in ['/', '/health', '/kaithhealthcheck', '/healthcheck']:
+            self.send_response(200)
+            self.send_header('Content-type', 'text/plain')
+            self.end_headers()
+            self.wfile.write(b'OK')
+        else:
+            self.send_response(404)
+            self.end_headers()
+    
+    def log_message(self, format, *args):
+        pass
 
-# LOGGING - SETUP LEBIH DETAIL
+def run_health_server():
+    """Jalankan health server di thread terpisah"""
+    port = 8080 
+    server = HTTPServer(('0.0.0.0', port), HealthHandler)
+    print(f"🌐 Health server running on port {port}")
+    try:
+        server.serve_forever()
+    except Exception as e:
+        print(f"❌ Health server error: {e}")
+
+# Start health
+health_thread = threading.Thread(target=run_health_server, daemon=True)
+health_thread.start()
+
+# LOGGING 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     level=logging.INFO,
@@ -41,7 +66,7 @@ load_dotenv()
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 
-# VALIDASI TOKEN SEBELUM BOT DIBUAT
+# VALIDASI TOKEN
 if not DISCORD_TOKEN:
     logger.error("❌ DISCORD_TOKEN tidak ditemukan di environment variables")
     print("❌ DISCORD_TOKEN tidak ditemukan!")
@@ -163,8 +188,6 @@ def is_admin(member: discord.Member):
         if role.name.lower() in ["admin", "administrator", "owner", "moderator"]:
             return True
     return False
-
-# ... [kode lain tetap sama] ...
 
 # JADWAL KULIAH SYSTEM
 WIB = timezone(timedelta(hours=7))
