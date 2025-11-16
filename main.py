@@ -2,16 +2,16 @@ import discord
 from discord.ext import commands, tasks
 import logging
 import os
-import time as py_time
+import time as py_time # Alias untuk modul time standar
 import asyncio
-from datetime import datetime, timedelta, time as dt_time, timezone
+from datetime import datetime, timedelta, time as dt_time, timezone # Alias untuk fungsi time dari datetime
 from dotenv import load_dotenv
 import aiohttp
 from typing import Dict, List, Optional
 import re
 import threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
-import json 
+import json
 
 try:
     from ai_bot_service import ai_bot_service
@@ -35,13 +35,13 @@ class HealthHandler(BaseHTTPRequestHandler):
         else:
             self.send_response(404)
             self.end_headers()
-    
+
     def log_message(self, format, *args):
         pass
 
 def run_health_server():
     """Jalankan health server di thread terpisah"""
-    port = 8080 
+    port = 8080
     server = HTTPServer(('0.0.0.0', port), HealthHandler)
     print(f"🌐 Health server running on port {port}")
     try:
@@ -49,17 +49,13 @@ def run_health_server():
     except Exception as e:
         print(f"❌ Health server error: {e}")
 
+# Start health server di background thread
 health_thread = threading.Thread(target=run_health_server, daemon=True)
 health_thread.start()
 
-import time
-time.sleep(5) 
+py_time.sleep(5) 
 
-# Start health
-health_thread = threading.Thread(target=run_health_server, daemon=True)
-health_thread.start()
-
-# LOGGING 
+# LOGGING - SETUP LEBIH DETAIL
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     level=logging.INFO,
@@ -95,7 +91,7 @@ else:
     else:
         print(f"✅ Token ditemukan, panjang: {len(DISCORD_TOKEN)} karakter")
 
-# BOT SETUP DENGAN ERROR HANDLING
+# BOT Hanling error
 intents = discord.Intents.default()
 intents.message_content = True
 intents.members = True
@@ -117,8 +113,6 @@ class MyBot(commands.Bot):
 
         # Start background tasks
         try:
-            # Hapus atau nonaktifkan friday_reminder jika tidak digunakan
-            # friday_reminder.start()
             daily_jadwal_reminder.start()
             print("✅ Background tasks started")
         except Exception as e:
@@ -147,7 +141,7 @@ class RateLimiter:
         self.DAILY_RESET_INTERVAL = 24 * 60 * 60
 
     def check_reset(self):
-        now = py_time.time()
+        now = py_time.time() 
         if now - self.last_reset_time >= self.DAILY_RESET_INTERVAL:
             self.user_daily_usage.clear()
             self.last_reset_time = now
@@ -195,7 +189,7 @@ def is_admin(member: discord.Member):
             return True
     return False
 
-# JADWAL KULIAH SYSTEM
+# JADWAL KULIAH
 WIB = timezone(timedelta(hours=7))
 
 def parse_jadwal_file():
@@ -203,7 +197,6 @@ def parse_jadwal_file():
     try:
         with open('JadwalKuliah.txt', 'r', encoding='utf-8') as file:
             content = file.read()
-        # Gunakan regex untuk menangkap blok jadwal
         pattern = r'---+\n([E-Learning|Tatap Muka]+ \d{1,2}[a-zA-Z]* - .*?\d{4})\n(.*?)(?=---|$)'
         matches = re.findall(pattern, content, re.DOTALL)
         jadwal_list = []
@@ -222,14 +215,12 @@ def get_jadwal_for_date(target_date_str: str):
 
     for jadwal in jadwal_list:
         header = jadwal['header']
-        # Ekstrak tanggal awal dan akhir dari header
         dates_part = header.split(" - ")
         if len(dates_part) < 2:
             continue
 
-        start_date_str = dates_part[0].split(" ", 1)[1] # Ambil bagian setelah 'E-Learning' atau 'Tatap muka'
+        start_date_str = dates_part[0].split(" ", 1)[1]
         end_date_str = dates_part[1]
-        # Ambil tahun dari bagian akhir header
         year_match = re.search(r'(\d{4})', header)
         year = year_match.group(1) if year_match else None
 
@@ -254,7 +245,7 @@ def get_jadwal_for_date(target_date_str: str):
             if target_day is not None:
                 days_diff = (target_day - start_date.weekday()) % 7
                 if days_diff == 0:
-                    days_diff = 7 
+                    days_diff = 7
                 end_date = start_date + timedelta(days=days_diff)
             else:
                 continue
@@ -284,7 +275,7 @@ def get_current_jadwal():
     return get_jadwal_for_date(today_str)
 
 # BACKGROUND TASKS
-@tasks.loop(time=dt_time(hour=8, minute=0, tzinfo=WIB)) # Daily at 8 AM WIB
+@tasks.loop(time=dt_time(hour=8, minute=0, tzinfo=WIB))
 async def daily_jadwal_reminder():
     print("🔔 Daily jadwal reminder check")
     guild = bot.guilds[0] if bot.guilds else None
@@ -292,7 +283,7 @@ async def daily_jadwal_reminder():
         print("❌ Tidak ada guild untuk mengirim reminder.")
         return
 
-    channel = guild.system_channel or guild.text_channels[0] # Gunakan system channel atau channel pertama
+    channel = guild.system_channel or guild.text_channels[0] 
     jadwal_tomorrow = get_jadwal_tomorrow()
 
     if jadwal_tomorrow:
@@ -307,7 +298,7 @@ async def daily_jadwal_reminder():
     else:
         print("✅ Tidak ada jadwal untuk besok.")
 
-# OCR HANDLER (Pindahkan ke dalam handler mention)
+# OCR HANDLER
 async def handle_ocr_attachment(attachment, user_id: int, channel):
     try:
         if attachment.size > 5_000_000:
@@ -370,14 +361,12 @@ async def on_message(msg):
                 await msg.channel.send(f"{msg.author.mention} 📚 Tidak ada jadwal kuliah yang ditemukan untuk hari ini.")
                 return
 
-        # Handler OCR (jika ada lampiran saat mention)
+        # Handler OCR
         if msg.attachments:
             for attachment in msg.attachments:
                 if attachment.filename.lower().endswith((".png", ".jpg", ".jpeg", ".pdf")):
                     await handle_ocr_attachment(attachment, msg.author.id, msg.channel)
-                    return # Hentikan proses lebih lanjut jika OCR dijalankan
-            # Jika ada attachment tapi bukan gambar/pdf, lanjutkan ke AI
-
+                    return
         # Handler AI biasa
         prompt = msg.content.replace(f"<@{bot.user.id}>", "").replace(f"<@!{bot.user.id}>", "").strip()
         if not prompt:
