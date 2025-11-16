@@ -24,7 +24,7 @@ except ImportError:
 
 print("🚀 Starting Techfour Bot")
 
-# HEALTH SERVER DI THREAD TERPISAH
+# HEALTH SERVER
 class HealthHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path in ['/', '/health', '/kaithhealthcheck', '/healthcheck']:
