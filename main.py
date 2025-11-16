@@ -24,31 +24,6 @@ except ImportError:
 
 print("🚀 Starting Techfour Bot")
 
-# HEALTH SERVER DI THREAD TERPISAH
-class HealthHandler(BaseHTTPRequestHandler):
-    def do_GET(self):
-        if self.path in ['/', '/health', '/kaithhealthcheck', '/healthcheck']:
-            self.send_response(200)
-            self.send_header('Content-type', 'text/plain')
-            self.end_headers()
-            self.wfile.write(b'OK')
-        else:
-            self.send_response(404)
-            self.end_headers()
-
-    def log_message(self, format, *args):
-        pass
-
-def run_health_server():
-    """Jalankan health server di thread terpisah"""
-    port = 8080
-    server = HTTPServer(('0.0.0.0', port), HealthHandler)
-    print(f"🌐 Health server running on port {port}")
-    try:
-        server.serve_forever()
-    except Exception as e:
-        print(f"❌ Health server error: {e}")
-
 # Start health server di background thread
 #health_thread = threading.Thread(target=run_health_server, daemon=True)
 #health_thread.start()
