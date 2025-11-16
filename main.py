@@ -11,11 +11,10 @@ from typing import Dict, List, Optional
 import re
 
 from ai_bot_service import ai_bot_service
-
 from aiohttp import web
 
-
 print("🚀 Starting Techfour Bot")
+
 # HEALTHCHECK SERVER
 async def start_webserver():
     """Webserver yang berjalan di asyncio-task, bukan thread."""
@@ -62,7 +61,6 @@ intents.guilds = True
 intents.presences = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
-
 
 # RATE LIMITER
 class RateLimiter:
@@ -115,7 +113,6 @@ class ActivityTracker:
         self.last_activity[uid] = datetime.now()
 
 activity_tracker = ActivityTracker()
-
 
 def is_admin(member: discord.Member):
     if member.guild.owner_id == member.id:
@@ -283,7 +280,7 @@ def get_upcoming_jadwal():
     
     return upcoming_jadwal
 
-# ✅ TASK REMINDER JADWAL OTOMATIS
+# TASK REMINDER JADWAL OTOMATIS
 @tasks.loop(time=time(hour=8, minute=0))  # Jam 08:00 WIB setiap hari
 async def daily_jadwal_reminder():
     """Mengirim reminder jadwal setiap hari"""
@@ -338,114 +335,26 @@ async def handle_ocr_attachment(attachment, user_id: int):
     try:
         if attachment.size > 5_000_000:  # 5MB
             return "❌ File terlalu besar (max 5MB)."
-        image_url = attachment.url
-        headers = {
-            "Authorization": f"Bot {DISCORD_TOKEN}" 
-        }
+        
+        headers = {"Authorization": f"Bot {DISCORD_TOKEN}"}
         async with aiohttp.ClientSession() as session:
-            async with session.get(image_url, headers=headers, timeout=10) as resp:
+            async with session.get(attachment.url, headers=headers, timeout=10) as resp:
                 if resp.status != 200:
                     return f"❌ Gagal mengunduh gambar. Status: {resp.status}"
                 image_bytes = await resp.read()
 
         if len(image_bytes) == 0:
             return "❌ Gambar kosong."
+        
         ocr_prompt = "Tolong ekstrak semua teks yang terlihat di gambar ini. Jika ada bagian yang tidak bisa dibaca atau tidak ada teks, beri tahu saya."
         ocr_result = await ai_bot_service.get_response(ocr_prompt, user_id, image_bytes=image_bytes)
         return f"📄 **Hasil OCR dari Gambar:**\n{ocr_result}"
+    
     except asyncio.TimeoutError:
         return "❌ Timeout saat mengunduh gambar. Coba lagi nanti."
     except Exception as e:
         logging.error(f"OCR attachment error: {e}")
         return f"❌ Gagal memproses gambar. Coba lagi nanti."
-
-@bot.event
-async def on_ready():
-    print(f'✅ {bot.user.name} berhasil login!')
-    print(f'📊 Connected to {len(bot.guilds)} guilds')
-    
-    # Start semua tasks
-    friday_reminder.start()
-    daily_jadwal_reminder.start()  
-    
-    logging.info("Bot fully operational with jadwal system")
-
-@bot.event
-async def on_message(message: discord.Message):
-    if message.author == bot.user:
-        return
-
-    activity_tracker.update_activity(message.author.id)
-
-    # sensor kata kasar
-    TOXIC_KEYWORDS = ["kontol", "memek", "bangsat", "ngentod"]
-    if any(k in message.content.lower() for k in TOXIC_KEYWORDS):
-        try:
-            await message.delete()
-            await message.channel.send(f"{message.author.mention}, jaga bahasanya ya 🙏")
-        except:
-            pass
-        await bot.process_commands(message)
-        return
-
-    # 🎓 JADWAL KULIAH HANDLER
-    if bot.user.mentioned_in(message) and not message.mention_everyone:
-        user_prompt = message.content.replace(f"<@{bot.user.id}>", "").replace(f"<@!{bot.user.id}>", "").strip().lower()
-        
-        # Cek jika user menanyakan jadwal kuliah
-        jadwal_keywords = ['jadwal', 'kuliah', 'elearning', 'e-learning', 'tatap muka', 'uas', 'perkuliahan', 'minggu ini', 'hari ini']
-        if any(keyword in user_prompt for keyword in jadwal_keywords):
-            await message.channel.typing()
-            current_jadwal = get_current_jadwal()
-            
-            if current_jadwal:
-                response = f"📚 **JADWAL KULIAH TERDEKAT** 📚\n"
-                response += f"Hai {message.author.mention}! Berikut jadwal kuliah untuk minggu ini:\n\n"
-                
-                for jadwal in current_jadwal:
-                    response += f"```\n{jadwal['content']}\n```\n"
-                
-                response += "🎓 *Jangan lupa dipersiapkan!*"
-                
-                if len(response) > 2000:
-                    parts = [response[i:i+2000] for i in range(0, len(response), 2000)]
-                    for part in parts:
-                        await message.channel.send(part)
-                else:
-                    await message.channel.send(response)
-                    
-                print(f"📚 [JADWAL] Sent jadwal to {message.author.name}")
-                return 
-            else:
-                await message.channel.send(f"{message.author.mention} 📚 Tidak ada jadwal kuliah dalam 7 hari ke depan. Coba tanya lagi minggu depan!")
-                return 
-            
-# OCR HANDLER
-async def handle_ocr_attachment(attachment, uid):
-    try:
-        if attachment.size > 5_000_000:
-            return "❌ File > 5MB."
-
-        headers = {"Authorization": f"Bot {DISCORD_TOKEN}"}
-        async with aiohttp.ClientSession() as ses:
-            async with ses.get(attachment.url, headers=headers) as r:
-                if r.status != 200:
-                    return f"❌ Gagal download ({r.status})"
-                img = await r.read()
-
-        if not img:
-            return "❌ Gambar kosong."
-
-        text = await ai_bot_service.get_response(
-            "Extract all text from this image:", uid, image_bytes=img
-        )
-
-        return f"📄 **Hasil OCR:**\n{text}"
-
-    except Exception as e:
-        logging.error(e)
-        return "❌ Error OCR"
-
 
 # BOT EVENT HANDLERS
 @bot.event
@@ -457,11 +366,10 @@ async def on_ready():
     friday_reminder.start()
     daily_jadwal_reminder.start()
 
-    # start webserver (WAJIB LEAPCELL)
+    # start webserver
     asyncio.create_task(start_webserver())
 
     logging.info("Bot fully operational.")
-
 
 @bot.event
 async def on_message(msg):
@@ -470,39 +378,68 @@ async def on_message(msg):
 
     activity_tracker.update_activity(msg.author.id)
 
-    # filter toxic
-    for word in ["kontol", "memek", "bangsat", "ngentod"]:
-        if word in msg.content.lower():
-            try:
-                await msg.delete()
-                await msg.channel.send(f"{msg.author.mention} jaga bahasanya ya 🙏")
-            except:
-                pass
-            return
+    # Filter kata kasar
+    toxic_words = ["kontol", "memek", "bangsat", "ngentod, niki, anjing"]
+    if any(word in msg.content.lower() for word in toxic_words):
+        try:
+            await msg.delete()
+            await msg.channel.send(f"{msg.author.mention} jaga bahasanya ya 🙏")
+        except Exception as e:
+            logging.error(f"Error deleting toxic message: {e}")
+        return
 
-    # OCR
+    # OCR Handler
     if msg.attachments:
-        for att in msg.attachments:
-            if att.filename.lower().endswith((".png", ".jpg", ".jpeg", ".pdf")):
+        for attachment in msg.attachments:
+            if attachment.filename.lower().endswith((".png", ".jpg", ".jpeg", ".pdf")):
                 await msg.channel.typing()
-                res = await handle_ocr_attachment(att, msg.author.id)
-                await msg.channel.send(res)
+                result = await handle_ocr_attachment(attachment, msg.author.id)
+                await msg.channel.send(result)
                 return
 
-    # Mention = AI
+    # Handler untuk mention bot - jadwal kuliah
     if bot.user.mentioned_in(msg) and not msg.mention_everyone:
-        prompt = (
-            msg.content.replace(f"<@{bot.user.id}>", "")
-            .replace(f"<@!{bot.user.id}>", "")
-            .strip()
-        )
+        user_prompt = msg.content.replace(f"<@{bot.user.id}>", "").replace(f"<@!{bot.user.id}>", "").strip().lower()
+        
+        # Cek jika user menanyakan jadwal kuliah
+        jadwal_keywords = ['jadwal', 'kuliah', 'elearning', 'e-learning', 'tatap muka', 'uas', 'perkuliahan', 'minggu ini', 'hari ini']
+        if any(keyword in user_prompt for keyword in jadwal_keywords):
+            await msg.channel.typing()
+            current_jadwal = get_current_jadwal()
+            
+            if current_jadwal:
+                response = f"📚 **JADWAL KULIAH TERDEKAT** 📚\n"
+                response += f"Hai {msg.author.mention}! Berikut jadwal kuliah untuk minggu ini:\n\n"
+                
+                for jadwal in current_jadwal:
+                    response += f"```\n{jadwal['content']}\n```\n"
+                
+                response += "🎓 *Jangan lupa dipersiapkan!*"
+                
+                if len(response) > 2000:
+                    parts = [response[i:i+2000] for i in range(0, len(response), 2000)]
+                    for part in parts:
+                        await msg.channel.send(part)
+                else:
+                    await msg.channel.send(response)
+                    
+                print(f"📚 [JADWAL] Sent jadwal to {msg.author.name}")
+                return
+            else:
+                await msg.channel.send(f"{msg.author.mention} 📚 Tidak ada jadwal kuliah dalam 7 hari ke depan. Coba tanya lagi minggu depan!")
+                return
+        
+        # Handler AI biasa untuk mention
+        prompt = msg.content.replace(f"<@{bot.user.id}>", "").replace(f"<@!{bot.user.id}>", "").strip()
         if not prompt:
-            return await msg.channel.send("Halo! Ada yang bisa kubantu?")
+            await msg.channel.send("Halo! Ada yang bisa kubantu?")
+            return
 
         admin = is_admin(msg.author)
-        ok, err = await rate_limiter.can_use_ai(msg.author.id, admin)
-        if not ok:
-            return await msg.channel.send(err)
+        can_use, error_msg = await rate_limiter.can_use_ai(msg.author.id, admin)
+        if not can_use:
+            await msg.channel.send(error_msg)
+            return
 
         await msg.channel.typing()
         await rate_limiter.record(msg.author.id)
@@ -511,7 +448,6 @@ async def on_message(msg):
         return
 
     await bot.process_commands(msg)
-
 
 if __name__ == "__main__":
     bot.run(DISCORD_TOKEN)
