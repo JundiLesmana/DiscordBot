@@ -9,37 +9,43 @@ from dotenv import load_dotenv
 import aiohttp
 from typing import Dict, List, Optional
 import re
+import threading
+from http.server import HTTPServer, BaseHTTPRequestHandler
 
 from ai_bot_service import ai_bot_service
-from aiohttp import web
 
 print("🚀 Starting Techfour Bot")
 
-# HEALTHCHECK SERVER
-async def start_webserver():
-    """Webserver dengan endpoint yang benar"""
-    async def health(req):
-        return web.Response(text="OK")
+# HEALTH SERVER
+class HealthHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        if self.path in ['/', '/health', '/kaithhealthcheck', '/healthcheck']:
+            self.send_response(200)
+            self.send_header('Content-type', 'text/plain')
+            self.end_headers()
+            self.wfile.write(b'OK')
+            print(f"✅ Health check received: {self.path}")
+        else:
+            self.send_response(404)
+            self.end_headers()
     
-    async def health_check(req):
-        return web.Response(text="OK")
+    def log_message(self, format, *args):
+        # Reduce logging noise
+        pass
 
+def run_health_server():
+    """Jalankan health server di thread terpisah"""
     port = int(os.getenv("PORT", 8080))
-    app = web.Application()
-    
-    app.router.add_get("/", health)
-    app.router.add_get("/health", health)
-    app.router.add_get("/kaithhealthcheck", health)
-    app.router.add_get("/healthcheck", health)
-
-    runner = web.AppRunner(app)
-    await runner.setup()
-
-    site = web.TCPSite(runner, "0.0.0.0", port)
-    await site.start()
-
-    print(f"🌐 Healthcheck server running on port {port}")
+    server = HTTPServer(('0.0.0.0', port), HealthHandler)
+    print(f"🌐 Health server running on port {port}")
     print("✅ Endpoints: /, /health, /kaithhealthcheck, /healthcheck")
+    try:
+        server.serve_forever()
+    except Exception as e:
+        print(f"❌ Health server error: {e}")
+
+health_thread = threading.Thread(target=run_health_server, daemon=True)
+health_thread.start()
 
 # LOGGING
 logging.basicConfig(
@@ -55,7 +61,8 @@ DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 
 if not DISCORD_TOKEN:
-    raise ValueError("❌ Missing DISCORD_TOKEN")
+    logging.error("❌ Missing DISCORD_TOKEN")
+    # Tetap jalankan health server meski token tidak ada
 
 # BOT SETUP
 intents = discord.Intents.default()
@@ -150,7 +157,7 @@ class WebhookLogger:
 
 webhook_logger = WebhookLogger(WEBHOOK_URL)
 
-# JADWAL KULIAH SYSTEM 
+# JADWAL KULIAH
 WIB = timezone(timedelta(hours=7))
 
 def parse_jadwal_file():
@@ -365,13 +372,22 @@ async def handle_ocr_attachment(attachment, user_id: int):
 async def on_ready():
     print(f"🎉 {bot.user} ONLINE")
     print(f"📊 Connected to {len(bot.guilds)} servers")
+    
+    # Set bot status
+    await bot.change_presence(
+        activity=discord.Activity(
+            type=discord.ActivityType.listening,
+            name="mentions & commands"
+        )
+    )
 
-    # start tasks
-    friday_reminder.start()
-    daily_jadwal_reminder.start()
-
-    # start webserver
-    asyncio.create_task(start_webserver())
+    # Start tasks
+    try:
+        friday_reminder.start()
+        daily_jadwal_reminder.start()
+        print("✅ Background tasks started")
+    except Exception as e:
+        print(f"⚠️ Error starting tasks: {e}")
 
     logging.info("Bot fully operational.")
 
@@ -383,7 +399,7 @@ async def on_message(msg):
     activity_tracker.update_activity(msg.author.id)
 
     # Filter kata kasar
-    toxic_words = ["kontol", "memek", "bangsat", "ngentod, niki, anjing"]
+    toxic_words = ["kontol", "memek", "bangsat", "ngentod", "niki", "anjing"]
     if any(word in msg.content.lower() for word in toxic_words):
         try:
             await msg.delete()
@@ -433,7 +449,7 @@ async def on_message(msg):
                 await msg.channel.send(f"{msg.author.mention} 📚 Tidak ada jadwal kuliah dalam 7 hari ke depan. Coba tanya lagi minggu depan!")
                 return
         
-        # Handler AI biasa untuk mention
+        # Handler respon
         prompt = msg.content.replace(f"<@{bot.user.id}>", "").replace(f"<@!{bot.user.id}>", "").strip()
         if not prompt:
             await msg.channel.send("Halo! Ada yang bisa kubantu?")
@@ -453,5 +469,20 @@ async def on_message(msg):
 
     await bot.process_commands(msg)
 
+# JALANKAN BOT
 if __name__ == "__main__":
-    bot.run(DISCORD_TOKEN)
+    if DISCORD_TOKEN:
+        print("🤖 Starting Discord bot...")
+        try:
+            bot.run(DISCORD_TOKEN)
+        except Exception as e:
+            logging.error(f"Bot error: {e}")
+            print(f"❌ Bot crashed: {e}")
+    else:
+        print("⚠️ No DISCORD_TOKEN, health server only")
+        # Keep health server running
+        try:
+            while True:
+                py_time.sleep(60)
+        except KeyboardInterrupt:
+            print("Server stopped")
