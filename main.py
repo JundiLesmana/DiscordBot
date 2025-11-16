@@ -240,26 +240,21 @@ def get_jadwal_for_date(target_date_str: str):
                 continue
 
         # Format tanggal akhir
-        # Cek apakah akhirnya adalah hari (Sabtu, Minggu, dll)
         if re.match(r'^[A-Za-z]+$', end_date_str.strip()):
-            # Jika akhirnya adalah hari, kita cari hari tersebut dalam minggu yang sama dengan start_date
             day_name = end_date_str.strip()
-            # Konversi nama hari ke angka (Senin=0, Selasa=1, ..., Minggu=6)
             day_map = {
                 'Senin': 0, 'Selasa': 1, 'Rabu': 2, 'Kamis': 3, 'Jumat': 4,
                 'Sabtu': 5, 'Minggu': 6
             }
             target_day = day_map.get(day_name.capitalize())
             if target_day is not None:
-                # Hitung selisih hari
                 days_diff = (target_day - start_date.weekday()) % 7
                 if days_diff == 0:
-                    days_diff = 7 # Jika hari sama, maka satu minggu penuh
+                    days_diff = 7 
                 end_date = start_date + timedelta(days=days_diff)
             else:
-                continue # Tidak bisa konversi hari
+                continue
         else:
-            # Jika bukan hari, proses sebagai tanggal
             try:
                 end_full = end_date_str + (" " + year if year else "")
                 end_date = datetime.strptime(end_full, "%d%B %Y").date()
@@ -268,9 +263,9 @@ def get_jadwal_for_date(target_date_str: str):
                     end_date = datetime.strptime(end_date_str, "%d%B").date().replace(year=int(year))
                 except ValueError:
                     continue
-
         if start_date <= target_date <= end_date:
             return jadwal
+
     return None
 
 def get_jadwal_tomorrow():
