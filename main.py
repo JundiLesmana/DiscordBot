@@ -16,7 +16,6 @@ import json
 try:
     from ai_bot_service import ai_bot_service
 except ImportError:
-    # Fallback untuk testing
     class MockAIBotService:
         async def get_response(self, prompt, user_id, image_bytes=None):
             return f"AI Response untuk: {prompt}"
@@ -49,13 +48,12 @@ def run_health_server():
     except Exception as e:
         print(f"❌ Health server error: {e}")
 
-# Start health server di background thread
 health_thread = threading.Thread(target=run_health_server, daemon=True)
 health_thread.start()
 
 py_time.sleep(5) 
 
-# LOGGING - SETUP LEBIH DETAIL
+# LOGGING
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     level=logging.INFO,
@@ -72,7 +70,6 @@ WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 if not DISCORD_TOKEN:
     logger.error("❌ DISCORD_TOKEN tidak ditemukan di environment variables")
     print("❌ DISCORD_TOKEN tidak ditemukan!")
-    # Tetap jalankan health server
     try:
         while True:
             py_time.sleep(60)
@@ -274,6 +271,28 @@ def get_current_jadwal():
     today_str = datetime.now(WIB).date().strftime("%Y-%m-%d")
     return get_jadwal_for_date(today_str)
 
+def get_jadwal_next_week():
+    """Mendapatkan jadwal untuk minggu depan (7 hari dari sekarang)"""
+    next_week = datetime.now(WIB).date() + timedelta(days=7)
+    next_week_str = next_week.strftime("%Y-%m-%d")
+    return get_jadwal_for_date(next_week_str)
+
+def get_all_jadwal_next_week():
+    """Mendapatkan semua jadwal untuk minggu depan (7 hari ke depan)"""
+    jadwal_list = parse_jadwal_file()
+    result_jadwal = []
+    
+    # Searching for each day in the next 7 days
+    for i in range(7):
+        target_date = datetime.now(WIB).date() + timedelta(days=i+1)
+        target_date_str = target_date.strftime("%Y-%m-%d")
+        
+        jadwal = get_jadwal_for_date(target_date_str)
+        if jadwal and jadwal not in result_jadwal:
+            result_jadwal.append(jadwal)
+    
+    return result_jadwal
+
 # BACKGROUND TASKS
 @tasks.loop(time=dt_time(hour=8, minute=0, tzinfo=WIB))
 async def daily_jadwal_reminder():
@@ -315,7 +334,7 @@ async def handle_ocr_attachment(attachment, user_id: int, channel):
 
         await channel.typing()
         ocr_result = await ai_bot_service.get_response(
-            "Tolong ekstrak semua teks yang terlihat di gambar ini.", # Prompt default untuk OCR
+            "Tolong ekstrak semua teks yang terlihat di gambar ini.", # Prompt default OCR
             user_id,
             image_bytes=image_bytes
         )
@@ -334,7 +353,7 @@ async def on_message(msg):
     activity_tracker.update_activity(msg.author.id)
 
     # Filter kata kasar
-    toxic_words = ["kontol", "memek", "bangsat", "ngentod", "niki", "anjing"]
+    toxic_words = ["kontol", "memek", "bangsat", "ngentod", "jembut", "anjing"]
     if any(word in msg.content.lower() for word in toxic_words):
         try:
             await msg.delete()
@@ -347,9 +366,9 @@ async def on_message(msg):
     if bot.user.mentioned_in(msg) and not msg.mention_everyone:
         user_prompt = msg.content.replace(f"<@{bot.user.id}>", "").replace(f"<@!{bot.user.id}>", "").strip().lower()
 
-        # Cek jadwal kuliah
-        jadwal_keywords = ['jadwal', 'kuliah', 'elearning', 'e-learning', 'tatap muka', 'uas']
-        if any(keyword in user_prompt for keyword in jadwal_keywords):
+        # Cek jadwal kuliah hari ini
+        jadwal_keywords_today = ['jadwal', 'kuliah', 'elearning', 'e-learning', 'tatap muka', 'hari ini']
+        if any(keyword in user_prompt for keyword in jadwal_keywords_today):
             await msg.channel.typing()
             current_jadwal = get_current_jadwal()
 
@@ -361,13 +380,29 @@ async def on_message(msg):
                 await msg.channel.send(f"{msg.author.mention} 📚 Tidak ada jadwal kuliah yang ditemukan untuk hari ini.")
                 return
 
+        # Cek jadwal kuliah minggu depan
+        jadwal_keywords_next_week = ['minggu depan', 'next week', 'jadwal minggu depan']
+        if any(keyword in user_prompt for keyword in jadwal_keywords_next_week):
+            await msg.channel.typing()
+            next_week_jadwal = get_all_jadwal_next_week()
+
+            if next_week_jadwal:
+                response = f"📚 **JADWAL KULIAH MINGGU DEPAN** 📚\nHai {msg.author.mention}!\n\n"
+                for jadwal in next_week_jadwal:
+                    response += f"**{jadwal['header']}**\n```{jadwal['content']}```\n\n"
+                await msg.channel.send(response[:2000])  # Batasi panjang pesan
+                return
+            else:
+                await msg.channel.send(f"{msg.author.mention} 📚 Tidak ada jadwal kuliah yang ditemukan untuk minggu depan.")
+                return
+
         # Handler OCR
         if msg.attachments:
             for attachment in msg.attachments:
                 if attachment.filename.lower().endswith((".png", ".jpg", ".jpeg", ".pdf")):
                     await handle_ocr_attachment(attachment, msg.author.id, msg.channel)
                     return
-        # Handler AI biasa
+        # Handler AI
         prompt = msg.content.replace(f"<@{bot.user.id}>", "").replace(f"<@!{bot.user.id}>", "").strip()
         if not prompt:
             await msg.channel.send("Halo! Ada yang bisa kubantu?")
@@ -381,11 +416,10 @@ async def on_message(msg):
 
         await msg.channel.typing()
         await rate_limiter.record(msg.author.id)
-        reply = await ai_bot_service.get_response(prompt, msg.author.id, image_bytes=None) # Jika OCR tidak dijalankan, kirimkan None
+        reply = await ai_bot_service.get_response(prompt, msg.author.id, image_bytes=None) # ocr
         await msg.channel.send(reply[:2000])
         return
 
-    # Jika tidak mention, proses command biasa
     await bot.process_commands(msg)
 
 #Run bot error handling
