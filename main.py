@@ -195,97 +195,129 @@ def parse_jadwal_file():
     try:
         with open('JadwalKuliah.txt', 'r', encoding='utf-8') as file:
             content = file.read()
-        pattern = r'---+\n([E-Learning|Tatap Muka]+ \d{1,2}[a-zA-Z]* - .*?\d{4})\n(.*?)(?=---|$)'
+        
+        print("📖 Membaca file JadwalKuliah.txt...")
+        
+        pattern = r'-{3,}\s*\n([^\n]+)\n([^-]+)(?=\n-{3,}|\Z)'
         matches = re.findall(pattern, content, re.DOTALL)
+        
         jadwal_list = []
         for match in matches:
             header, detail = match
-            jadwal_list.append({"header": header.strip(), "content": detail.strip()})
+            jadwal_list.append({
+                "header": header.strip(), 
+                "content": detail.strip(),
+                "raw": f"{header.strip()}\n{detail.strip()}"
+            })
+        
+        print(f"✅ Ditemukan {len(jadwal_list)} jadwal")
+        for jadwal in jadwal_list:
+            print(f"   - {jadwal['header']}")
+        
         return jadwal_list
     except FileNotFoundError:
         logger.error("File JadwalKuliah.txt tidak ditemukan")
-        return [{"header": "Error", "content": "File JadwalKuliah.txt tidak ditemukan"}]
+        return [{"header": "Error", "content": "File JadwalKuliah.txt tidak ditemukan", "raw": "Error"}]
+    except Exception as e:
+        logger.error(f"Error parsing jadwal: {e}")
+        return [{"header": "Error", "content": f"Error parsing: {e}", "raw": "Error"}]
 
-def get_jadwal_for_date(target_date_str: str):
-    """Mendapatkan jadwal berdasarkan tanggal tertentu (YYYY-MM-DD)"""
-    jadwal_list = parse_jadwal_file()
-    target_date = datetime.strptime(target_date_str, "%Y-%m-%d").date()
-
-    for jadwal in jadwal_list:
-        header = jadwal['header']
-        dates_part = header.split(" - ")
-        if len(dates_part) < 2:
-            continue
-
-        start_date_str = dates_part[0].split(" ", 1)[1]
-        end_date_str = dates_part[1]
+def parse_date_from_header(header):
+    """Parse tanggal dari header jadwal"""
+    try:
+        print(f"🔍 Parsing header: {header}")
+        
         year_match = re.search(r'(\d{4})', header)
-        year = year_match.group(1) if year_match else None
-
-        # Format tanggal awal
-        try:
-            start_full = start_date_str + (" " + year if year else "")
-            start_date = datetime.strptime(start_full, "%d%B %Y").date()
-        except ValueError:
-            try:
-                start_date = datetime.strptime(start_date_str, "%d%B").date().replace(year=int(year))
-            except ValueError:
-                continue
-
-        # Format tanggal akhir
-        if re.match(r'^[A-Za-z]+$', end_date_str.strip()):
-            day_name = end_date_str.strip()
-            day_map = {
-                'Senin': 0, 'Selasa': 1, 'Rabu': 2, 'Kamis': 3, 'Jumat': 4,
-                'Sabtu': 5, 'Minggu': 6
+        year = int(year_match.group(1)) if year_match else 2025
+        
+        date_pattern = r'(\d{1,2})([A-Za-z]+)'
+        dates = re.findall(date_pattern, header)
+        
+        if len(dates) >= 2:
+            start_day, start_month = dates[0]
+            end_day, end_month = dates[1]
+            
+            month_map = {
+                'januari': 1, 'februari': 2, 'maret': 3, 'april': 4, 'mei': 5, 'juni': 6,
+                'juli': 7, 'agustus': 8, 'september': 9, 'oktober': 10, 'november': 11, 'desember': 12,
+                'january': 1, 'february': 2, 'march': 3, 'april': 4, 'may': 5, 'june': 6,
+                'july': 7, 'august': 8, 'september': 9, 'october': 10, 'november': 11, 'december': 12
             }
-            target_day = day_map.get(day_name.capitalize())
-            if target_day is not None:
-                days_diff = (target_day - start_date.weekday()) % 7
-                if days_diff == 0:
-                    days_diff = 7
-                end_date = start_date + timedelta(days=days_diff)
+            
+            start_month_num = month_map.get(start_month.lower(), 11)  
+            end_month_num = month_map.get(end_month.lower(), 11)     
+            
+            start_date = datetime(year, start_month_num, int(start_day)).date()
+            
+            # Jika end_month adalah nama hari, hitung berdasarkan start_date
+            if end_month.lower() in ['senin', 'selasa', 'rabu', 'kamis', 'jumat', 'sabtu', 'minggu']:
+                day_map = {'senin': 0, 'selasa': 1, 'rabu': 2, 'kamis': 3, 'jumat': 4, 'sabtu': 5, 'minggu': 6}
+                target_day = day_map.get(end_month.lower())
+                if target_day is not None:
+                    days_diff = (target_day - start_date.weekday()) % 7
+                    if days_diff == 0:
+                        days_diff = 7
+                    end_date = start_date + timedelta(days=days_diff)
+                else:
+                    end_date = start_date + timedelta(days=6)
             else:
-                continue
-        else:
-            try:
-                end_full = end_date_str + (" " + year if year else "")
-                end_date = datetime.strptime(end_full, "%d%B %Y").date()
-            except ValueError:
-                try:
-                    end_date = datetime.strptime(end_date_str, "%d%B").date().replace(year=int(year))
-                except ValueError:
-                    continue
-        if start_date <= target_date <= end_date:
-            return jadwal
+                end_date = datetime(year, end_month_num, int(end_day)).date()
+            
+            print(f"📅 Parsed: {start_date} to {end_date}")
+            return start_date, end_date
+        
+        return None, None
+    except Exception as e:
+        print(f"❌ Error parsing date: {e}")
+        return None, None
 
+def get_jadwal_for_date(target_date):
+    """Mendapatkan jadwal berdasarkan tanggal tertentu"""
+    jadwal_list = parse_jadwal_file()
+    
+    print(f"🔍 Mencari jadwal untuk: {target_date}")
+    
+    for jadwal in jadwal_list:
+        if jadwal['header'] == 'Error':
+            continue
+            
+        start_date, end_date = parse_date_from_header(jadwal['header'])
+        
+        if start_date and end_date:
+            print(f"   📋 Checking: {start_date} - {end_date}")
+            if start_date <= target_date <= end_date:
+                print(f"   ✅ DITEMUKAN: {jadwal['header']}")
+                return jadwal
+    
+    print("   ❌ Tidak ditemukan jadwal")
     return None
 
 def get_jadwal_tomorrow():
     """Mendapatkan jadwal yang dimulai besok"""
     tomorrow = datetime.now(WIB).date() + timedelta(days=1)
-    tomorrow_str = tomorrow.strftime("%Y-%m-%d")
-    return get_jadwal_for_date(tomorrow_str)
+    return get_jadwal_for_date(tomorrow)
 
 def get_current_jadwal():
     """Mendapatkan jadwal untuk hari ini"""
-    today_str = datetime.now(WIB).date().strftime("%Y-%m-%d")
-    return get_jadwal_for_date(today_str)
+    today = datetime.now(WIB).date()
+    return get_jadwal_for_date(today)
 
 def get_jadwal_this_week():
     """Mendapatkan semua jadwal untuk minggu ini (hari ini + 6 hari ke depan)"""
     jadwal_list = parse_jadwal_file()
     result_jadwal = []
     
-    # Cari jadwal untuk setiap hari dalam 7 hari ke depan (minggu ini)
+    print("🔍 Mencari jadwal minggu ini...")
+    
+    # Searching jadwal 7 days
     for i in range(7):
         target_date = datetime.now(WIB).date() + timedelta(days=i)
-        target_date_str = target_date.strftime("%Y-%m-%d")
+        jadwal = get_jadwal_for_date(target_date)
         
-        jadwal = get_jadwal_for_date(target_date_str)
         if jadwal and jadwal not in result_jadwal:
             result_jadwal.append(jadwal)
     
+    print(f"✅ Ditemukan {len(result_jadwal)} jadwal untuk minggu ini")
     return result_jadwal
 
 def get_jadwal_next_week():
@@ -293,15 +325,17 @@ def get_jadwal_next_week():
     jadwal_list = parse_jadwal_file()
     result_jadwal = []
     
-    # Cari jadwal untuk setiap hari dalam minggu depan
+    print("🔍 Mencari jadwal minggu depan...")
+    
+    # Cari jadwal untuk setiap hari dalam minggu depan (hari 7-13)
     for i in range(7, 14):
         target_date = datetime.now(WIB).date() + timedelta(days=i)
-        target_date_str = target_date.strftime("%Y-%m-%d")
+        jadwal = get_jadwal_for_date(target_date)
         
-        jadwal = get_jadwal_for_date(target_date_str)
         if jadwal and jadwal not in result_jadwal:
             result_jadwal.append(jadwal)
     
+    print(f"✅ Ditemukan {len(result_jadwal)} jadwal untuk minggu depan")
     return result_jadwal
 
 # BACKGROUND TASKS
@@ -345,7 +379,7 @@ async def handle_ocr_attachment(attachment, user_id: int, channel):
 
         await channel.typing()
         ocr_result = await ai_bot_service.get_response(
-            "Tolong ekstrak semua teks yang terlihat di gambar ini.", # Prompt default untuk OCR
+            "Tolong ekstrak semua teks yang terlihat di gambar ini.", # ocr
             user_id,
             image_bytes=image_bytes
         )
@@ -354,6 +388,77 @@ async def handle_ocr_attachment(attachment, user_id: int, channel):
     except Exception as e:
         logger.error(f"OCR error: {e}")
         await channel.send("❌ Gagal memproses gambar.")
+
+# JADWAL COMMAND HANDLER
+async def handle_jadwal_request(msg, user_prompt):
+    """Handler khusus untuk request jadwal kuliah"""
+    print(f"🎯 Handling jadwal request: {user_prompt}")
+    
+    # Cek jadwal kuliah hari ini
+    jadwal_keywords_today = ['jadwal hari ini', 'kuliah hari ini', 'hari ini']
+    if any(keyword in user_prompt for keyword in jadwal_keywords_today):
+        await msg.channel.typing()
+        current_jadwal = get_current_jadwal()
+
+        if current_jadwal:
+            response = f"📚 **JADWAL KULIAH HARI INI**\n**Periode:** {current_jadwal['header']}\nHai {msg.author.mention}!\n\n```{current_jadwal['content']}```"
+            await msg.channel.send(response)
+            return True
+        else:
+            await msg.channel.send(f"{msg.author.mention} 📚 Tidak ada jadwal kuliah yang ditemukan untuk hari ini.")
+            return True
+
+    # Cek jadwal kuliah minggu ini
+    jadwal_keywords_this_week = ['minggu ini', 'jadwal minggu ini', 'kuliah minggu ini', 'jadwal kuliah minggu ini']
+    if any(keyword in user_prompt for keyword in jadwal_keywords_this_week):
+        await msg.channel.typing()
+        this_week_jadwal = get_jadwal_this_week()
+
+        if this_week_jadwal:
+            response = f"📚 **JADWAL KULIAH MINGGU INI** 📚\nHai {msg.author.mention}!\n\n"
+            for jadwal in this_week_jadwal:
+                response += f"**{jadwal['header']}**\n```{jadwal['content']}```\n\n"
+            await msg.channel.send(response[:2000])
+            return True
+        else:
+            await msg.channel.send(f"{msg.author.mention} 📚 Tidak ada jadwal kuliah yang ditemukan untuk minggu ini.")
+            return True
+
+    # Cek jadwal kuliah minggu depan
+    jadwal_keywords_next_week = ['minggu depan', 'next week', 'jadwal minggu depan', 'kuliah minggu depan']
+    if any(keyword in user_prompt for keyword in jadwal_keywords_next_week):
+        await msg.channel.typing()
+        next_week_jadwal = get_jadwal_next_week()
+
+        if next_week_jadwal:
+            response = f"📚 **JADWAL KULIAH MINGGU DEPAN** 📚\nHai {msg.author.mention}!\n\n"
+            for jadwal in next_week_jadwal:
+                response += f"**{jadwal['header']}**\n```{jadwal['content']}```\n\n"
+            await msg.channel.send(response[:2000])
+            return True
+        else:
+            await msg.channel.send(f"{msg.author.mention} 📚 Tidak ada jadwal kuliah yang ditemukan untuk minggu depan.")
+            return True
+
+    # Handler untuk pertanyaan jadwal umum
+    jadwal_keywords_general = ['jadwal', 'kuliah', 'elearning', 'e-learning', 'tatap muka', 'uas']
+    if any(keyword in user_prompt for keyword in jadwal_keywords_general):
+        await msg.channel.typing()
+        # Default: tampilkan jadwal minggu ini
+        this_week_jadwal = get_jadwal_this_week()
+
+        if this_week_jadwal:
+            response = f"📚 **JADWAL KULIAH MINGGU INI** 📚\nHai {msg.author.mention}!\n\n"
+            for jadwal in this_week_jadwal:
+                response += f"**{jadwal['header']}**\n```{jadwal['content']}```\n\n"
+            response += "💡 *Ketik '@Techfour jadwal hari ini' atau '@Techfour jadwal minggu depan' untuk periode tertentu*"
+            await msg.channel.send(response[:2000])
+            return True
+        else:
+            await msg.channel.send(f"{msg.author.mention} 📚 Tidak ada jadwal kuliah yang ditemukan. Coba tanyakan untuk periode tertentu seperti 'hari ini' atau 'minggu depan'.")
+            return True
+
+    return False
 
 # MESSAGE HANDLER
 @bot.event
@@ -377,77 +482,19 @@ async def on_message(msg):
     if bot.user.mentioned_in(msg) and not msg.mention_everyone:
         user_prompt = msg.content.replace(f"<@{bot.user.id}>", "").replace(f"<@!{bot.user.id}>", "").strip().lower()
 
-        # Cek jadwal kuliah hari ini
-        jadwal_keywords_today = ['jadwal hari ini', 'kuliah hari ini', 'hari ini']
-        if any(keyword in user_prompt for keyword in jadwal_keywords_today):
-            await msg.channel.typing()
-            current_jadwal = get_current_jadwal()
+        print(f"📩 Received message: {user_prompt}")
 
-            if current_jadwal:
-                response = f"📚 **JADWAL KULIAH HARI INI ({current_jadwal['header']})** 📚\nHai {msg.author.mention}!\n\n```{current_jadwal['content']}```"
-                await msg.channel.send(response)
-                return
-            else:
-                await msg.channel.send(f"{msg.author.mention} 📚 Tidak ada jadwal kuliah yang ditemukan untuk hari ini.")
-                return
-
-        # Cek jadwal kuliah minggu ini
-        jadwal_keywords_this_week = ['minggu ini', 'jadwal minggu ini', 'kuliah minggu ini', 'jadwal kuliah minggu ini']
-        if any(keyword in user_prompt for keyword in jadwal_keywords_this_week):
-            await msg.channel.typing()
-            this_week_jadwal = get_jadwal_this_week()
-
-            if this_week_jadwal:
-                response = f"📚 **JADWAL KULIAH MINGGU INI** 📚\nHai {msg.author.mention}!\n\n"
-                for jadwal in this_week_jadwal:
-                    response += f"**{jadwal['header']}**\n```{jadwal['content']}```\n\n"
-                await msg.channel.send(response[:2000])  # Batas panjang pesan
-                return
-            else:
-                await msg.channel.send(f"{msg.author.mention} 📚 Tidak ada jadwal kuliah yang ditemukan untuk minggu ini.")
-                return
-
-        # Cek jadwal kuliah minggu depan
-        jadwal_keywords_next_week = ['minggu depan', 'next week', 'jadwal minggu depan', 'kuliah minggu depan']
-        if any(keyword in user_prompt for keyword in jadwal_keywords_next_week):
-            await msg.channel.typing()
-            next_week_jadwal = get_jadwal_next_week()
-
-            if next_week_jadwal:
-                response = f"📚 **JADWAL KULIAH MINGGU DEPAN** 📚\nHai {msg.author.mention}!\n\n"
-                for jadwal in next_week_jadwal:
-                    response += f"**{jadwal['header']}**\n```{jadwal['content']}```\n\n"
-                await msg.channel.send(response[:2000])  # Batas panjang pesan
-                return
-            else:
-                await msg.channel.send(f"{msg.author.mention} 📚 Tidak ada jadwal kuliah yang ditemukan untuk minggu depan.")
-                return
-
-        # Handler OCR
+        # Handler OCR - priority
         if msg.attachments:
             for attachment in msg.attachments:
                 if attachment.filename.lower().endswith((".png", ".jpg", ".jpeg", ".pdf")):
                     await handle_ocr_attachment(attachment, msg.author.id, msg.channel)
                     return
 
-        # Handler AI 
-        jadwal_keywords_general = ['jadwal', 'kuliah', 'elearning', 'e-learning', 'tatap muka']
-        if any(keyword in user_prompt for keyword in jadwal_keywords_general):
-            await msg.channel.typing()
-            # Default: tampilkan jadwal minggu ini
-            this_week_jadwal = get_jadwal_this_week()
-
-            if this_week_jadwal:
-                response = f"📚 **JADWAL KULIAH MINGGU INI** 📚\nHai {msg.author.mention}!\n\n"
-                for jadwal in this_week_jadwal:
-                    response += f"**{jadwal['header']}**\n```{jadwal['content']}```\n\n"
-                response += "💡 *Ketik '@Techfour jadwal hari ini' atau '@Techfour jadwal minggu depan' untuk periode tertentu*"
-                await msg.channel.send(response[:2000])
-                return
-            else:
-                await msg.channel.send(f"{msg.author.mention} 📚 Tidak ada jadwal kuliah yang ditemukan. Coba tanyakan untuk periode tertentu seperti 'hari ini' atau 'minggu depan'.")
-                return
-
+        jadwal_handled = await handle_jadwal_request(msg, user_prompt)
+        if jadwal_handled:
+            return  
+        
         # Handler AI
         prompt = msg.content.replace(f"<@{bot.user.id}>", "").replace(f"<@!{bot.user.id}>", "").strip()
         if not prompt:
