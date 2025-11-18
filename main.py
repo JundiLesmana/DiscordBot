@@ -2,9 +2,9 @@ import discord
 from discord.ext import commands, tasks
 import logging
 import os
-import time as py_time # Alias untuk modul time standar
+import time as py_time
 import asyncio
-from datetime import datetime, timedelta, time as dt_time, timezone # Alias untuk fungsi time dari datetime
+from datetime import datetime, timedelta, time as dt_time, timezone
 from dotenv import load_dotenv
 import aiohttp
 from typing import Dict, List, Optional
