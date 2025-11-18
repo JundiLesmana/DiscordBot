@@ -2,9 +2,9 @@ import discord
 from discord.ext import commands, tasks
 import logging
 import os
-import time as py_time # Alias untuk modul time standar
+import time as py_time
 import asyncio
-from datetime import datetime, timedelta, time as dt_time, timezone # Alias untuk fungsi time dari datetime
+from datetime import datetime, timedelta, time as dt_time, timezone 
 from dotenv import load_dotenv
 import aiohttp
 from typing import Dict, List, Optional
@@ -198,16 +198,27 @@ def parse_jadwal_file():
         
         print("📖 Membaca file JadwalKuliah.txt...")
         
-        pattern = r'-{3,}\s*\n([^\n]+)\n([^-]+)(?=\n-{3,}|\Z)'
-        matches = re.findall(pattern, content, re.DOTALL)
-        
+        # Split by separators (---)
+        sections = re.split(r'-{3,}\s*\n', content)
         jadwal_list = []
-        for match in matches:
-            header, detail = match
+        
+        for section in sections:
+            section = section.strip()
+            if not section:
+                continue
+                
+            # Split header and content
+            lines = section.split('\n', 1)
+            if len(lines) < 2:
+                continue
+                
+            header = lines[0].strip()
+            content = lines[1].strip()
+            
             jadwal_list.append({
-                "header": header.strip(), 
-                "content": detail.strip(),
-                "raw": f"{header.strip()}\n{detail.strip()}"
+                "header": header, 
+                "content": content,
+                "raw": f"{header}\n{content}"
             })
         
         print(f"✅ Ditemukan {len(jadwal_list)} jadwal")
@@ -227,15 +238,15 @@ def parse_date_from_header(header):
     try:
         print(f"🔍 Parsing header: {header}")
         
-        year_match = re.search(r'(\d{4})', header)
-        year = int(year_match.group(1)) if year_match else 2025
+        # Extract dates using regex
+        date_pattern = r'(\d{1,2})\s+([A-Za-z]+)\s*-\s*(\d{1,2})\s+([A-Za-z]+)'
+        match = re.search(date_pattern, header)
         
-        date_pattern = r'(\d{1,2})([A-Za-z]+)'
-        dates = re.findall(date_pattern, header)
-        
-        if len(dates) >= 2:
-            start_day, start_month = dates[0]
-            end_day, end_month = dates[1]
+        if match:
+            start_day = int(match.group(1))
+            start_month_name = match.group(2).lower()
+            end_day = int(match.group(3))
+            end_month_name = match.group(4).lower()
             
             month_map = {
                 'januari': 1, 'februari': 2, 'maret': 3, 'april': 4, 'mei': 5, 'juni': 6,
@@ -244,27 +255,48 @@ def parse_date_from_header(header):
                 'july': 7, 'august': 8, 'september': 9, 'october': 10, 'november': 11, 'december': 12
             }
             
-            start_month_num = month_map.get(start_month.lower(), 11)  
-            end_month_num = month_map.get(end_month.lower(), 11)     
+            year_match = re.search(r'(\d{4})', header)
+            year = int(year_match.group(1)) if year_match else 2025
             
-            start_date = datetime(year, start_month_num, int(start_day)).date()
+            start_month = month_map.get(start_month_name, 11)
+            end_month = month_map.get(end_month_name, 11)
             
-            # Jika end_month adalah nama hari, hitung berdasarkan start_date
-            if end_month.lower() in ['senin', 'selasa', 'rabu', 'kamis', 'jumat', 'sabtu', 'minggu']:
+            start_date = datetime(year, start_month, start_day).date()
+            end_date = datetime(year, end_month, end_day).date()
+            
+            print(f"📅 Parsed: {start_date} to {end_date}")
+            return start_date, end_date
+        
+        # Handle case where end date is a day of week (like "Sabtu")
+        if " - " in header:
+            parts = header.split(" - ", 1)
+            start_part = parts[0]
+            end_part = parts[1]
+            
+            # Parse start date
+            start_date_match = re.search(r'(\d{1,2})\s+([A-Za-z]+)', start_part)
+            if start_date_match:
+                start_day = int(start_date_match.group(1))
+                start_month_name = start_date_match.group(2).lower()
+                
+                year_match = re.search(r'(\d{4})', header)
+                year = int(year_match.group(1)) if year_match else 2025
+                
+                start_month = month_map.get(start_month_name, 11)
+                start_date = datetime(year, start_month, start_day).date()
+                
+                # If end part is a day name, calculate the date
                 day_map = {'senin': 0, 'selasa': 1, 'rabu': 2, 'kamis': 3, 'jumat': 4, 'sabtu': 5, 'minggu': 6}
-                target_day = day_map.get(end_month.lower())
-                if target_day is not None:
+                end_day_name = end_part.lower().strip()
+                
+                if end_day_name in day_map:
+                    target_day = day_map[end_day_name]
                     days_diff = (target_day - start_date.weekday()) % 7
                     if days_diff == 0:
                         days_diff = 7
                     end_date = start_date + timedelta(days=days_diff)
-                else:
-                    end_date = start_date + timedelta(days=6)
-            else:
-                end_date = datetime(year, end_month_num, int(end_day)).date()
-            
-            print(f"📅 Parsed: {start_date} to {end_date}")
-            return start_date, end_date
+                    print(f"📅 Parsed with day name: {start_date} to {end_date}")
+                    return start_date, end_date
         
         return None, None
     except Exception as e:
@@ -309,13 +341,22 @@ def get_jadwal_this_week():
     
     print("🔍 Mencari jadwal minggu ini...")
     
-    # Searching jadwal 7 days
-    for i in range(7):
-        target_date = datetime.now(WIB).date() + timedelta(days=i)
-        jadwal = get_jadwal_for_date(target_date)
+    # Get today's date
+    today = datetime.now(WIB).date()
+    
+    # Search for all jadwal that overlap with this week
+    for jadwal in jadwal_list:
+        if jadwal['header'] == 'Error':
+            continue
+            
+        start_date, end_date = parse_date_from_header(jadwal['header'])
         
-        if jadwal and jadwal not in result_jadwal:
-            result_jadwal.append(jadwal)
+        if start_date and end_date:
+            # Check if this jadwal overlaps with this week (today to today + 6 days)
+            week_end = today + timedelta(days=6)
+            if start_date <= week_end and end_date >= today:
+                print(f"   ✅ Found overlapping jadwal: {jadwal['header']}")
+                result_jadwal.append(jadwal)
     
     print(f"✅ Ditemukan {len(result_jadwal)} jadwal untuk minggu ini")
     return result_jadwal
@@ -327,13 +368,25 @@ def get_jadwal_next_week():
     
     print("🔍 Mencari jadwal minggu depan...")
     
-    # Cari jadwal untuk setiap hari dalam minggu depan (hari 7-13)
-    for i in range(7, 14):
-        target_date = datetime.now(WIB).date() + timedelta(days=i)
-        jadwal = get_jadwal_for_date(target_date)
+    # Get today's date
+    today = datetime.now(WIB).date()
+    
+    # Define next week range
+    next_week_start = today + timedelta(days=7)
+    next_week_end = today + timedelta(days=13)
+    
+    # Search for all jadwal that overlap with next week
+    for jadwal in jadwal_list:
+        if jadwal['header'] == 'Error':
+            continue
+            
+        start_date, end_date = parse_date_from_header(jadwal['header'])
         
-        if jadwal and jadwal not in result_jadwal:
-            result_jadwal.append(jadwal)
+        if start_date and end_date:
+            # Check if this jadwal overlaps with next week
+            if start_date <= next_week_end and end_date >= next_week_start:
+                print(f"   ✅ Found overlapping jadwal: {jadwal['header']}")
+                result_jadwal.append(jadwal)
     
     print(f"✅ Ditemukan {len(result_jadwal)} jadwal untuk minggu depan")
     return result_jadwal
