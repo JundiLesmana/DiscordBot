@@ -400,7 +400,16 @@ async def daily_jadwal_reminder():
         print("❌ Tidak ada guild untuk mengirim reminder.")
         return
 
-    channel = guild.system_channel or guild.text_channels[0] 
+    channel = guild.system_channel or guild.text_channels[0]
+
+    today = datetime.now(WIB).date()
+    day_of_week = today.weekday()
+
+    target_days = [4, 6]
+
+    if day_of_week not in target_days:
+        print(f"✅ Bukan hari Jumat/Minggu ({today.strftime('%A')}). Skipping...")
+        return  
     jadwal_tomorrow = get_jadwal_tomorrow()
 
     if jadwal_tomorrow:
