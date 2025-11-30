@@ -66,6 +66,32 @@ load_dotenv()
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 
+# Webhook Logger
+class WebhookLogger:
+    def __init__(self, webhook_url: Optional[str]):
+        self.webhook_url = webhook_url
+        self.session = None
+
+    async def get_session(self):
+        if self.session is None:
+            self.session = aiohttp.ClientSession()
+        return self.session
+
+    async def send_log(self, content: str):
+        if not self.webhook_url:
+            logger.debug("WEBHOOK_URL tidak diatur — log dilewati")
+            return
+        try:
+            session = await self.get_session()
+            payload = {"content": content}
+            async with session.post(self.webhook_url, json=payload) as resp:
+                if resp.status not in (200, 204):
+                    logger.error(f"❌ Webhook gagal: {resp.status} - {await resp.text()}")
+        except Exception as e:
+            logger.error(f"💥 Gagal kirim log ke Discord: {e}")
+
+webhook_logger = WebhookLogger(WEBHOOK_URL)
+
 # VALIDASI TOKEN
 if not DISCORD_TOKEN:
     logger.error("❌ DISCORD_TOKEN tidak ditemukan di environment variables")
