@@ -96,9 +96,21 @@ Tatap muka 13 Desember - Sabtu
 Tugas Kelompok
 -Pancasila - Kel.5
 -Agama - Kel.12,Kel.13,Kel.14
--Deadline Logic UTS - Artikel post media.
--Prepare Agama - Setoran hafalan Alfatihah & Artinya
--Prepare UAS Agama - Setoran hafalan Tahiyat akhir & artinya
+-Logic UTS - Artikel post media.
+
+Project Kelompok Logika
+Wajib bawa laptop,minimal 1 orang perkelompok.
+A. Membuat Study kasus dengan format ppt
+ i. wajib ada diagram tree
+ ii.wajib ada data gejala & data diagnosa
+B.Memebawa Jurnal Referensi
+ i. Download jurnal sesuai study kasus anda.
+ ii. Berikan bukti sinta ****** gk kebaca tulisan nya anj
+C.Membuat sistem
+ i.Aplikasi forward chaining sesuai dengan study kasus.
+
+Agama
+-Setoran hafalan Alfatihah & Artinya
 --------------------------------------
 E-Learning 15 Desember - 19 Desember 2025
 - Fisika dasar - pertemuan 21
