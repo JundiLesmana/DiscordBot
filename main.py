@@ -482,7 +482,6 @@ async def handle_jadwal_request(msg, user_prompt):
     """Handler khusus untuk request jadwal kuliah"""
     print(f"🎯 Handling jadwal request: {user_prompt}")
     
-    # Cek jadwal kuliah hari ini
     jadwal_keywords_today = ['jadwal hari ini', 'kuliah hari ini', 'hari ini']
     if any(keyword in user_prompt for keyword in jadwal_keywords_today):
         await msg.channel.typing()
@@ -496,7 +495,6 @@ async def handle_jadwal_request(msg, user_prompt):
             await msg.channel.send(f"{msg.author.mention} 📚 Tidak ada jadwal kuliah yang ditemukan untuk hari ini.")
             return True
 
-    # Cek jadwal kuliah minggu ini
     jadwal_keywords_this_week = ['minggu ini', 'jadwal minggu ini', 'kuliah minggu ini', 'jadwal kuliah minggu ini']
     if any(keyword in user_prompt for keyword in jadwal_keywords_this_week):
         await msg.channel.typing()
@@ -512,7 +510,6 @@ async def handle_jadwal_request(msg, user_prompt):
             await msg.channel.send(f"{msg.author.mention} 📚 Tidak ada jadwal kuliah yang ditemukan untuk minggu ini.")
             return True
 
-    # Cek jadwal kuliah minggu depan
     jadwal_keywords_next_week = ['minggu depan', 'next week', 'jadwal minggu depan', 'kuliah minggu depan']
     if any(keyword in user_prompt for keyword in jadwal_keywords_next_week):
         await msg.channel.typing()
@@ -528,11 +525,9 @@ async def handle_jadwal_request(msg, user_prompt):
             await msg.channel.send(f"{msg.author.mention} 📚 Tidak ada jadwal kuliah yang ditemukan untuk minggu depan.")
             return True
 
-    # Handler untuk pertanyaan jadwal umum
     jadwal_keywords_general = ['jadwal', 'kuliah', 'elearning', 'e-learning', 'tatap muka', 'uas']
     if any(keyword in user_prompt for keyword in jadwal_keywords_general):
         await msg.channel.typing()
-        # Default: tampilkan jadwal minggu ini
         this_week_jadwal = get_jadwal_this_week()
 
         if this_week_jadwal:
@@ -557,7 +552,7 @@ async def on_message(msg):
     activity_tracker.update_activity(msg.author.id)
 
     # Filter kata kasar
-    toxic_words = ["kontol", "memek", "bangsat", "ngentod", "niki", "anjing"]
+    toxic_words = ["kontol", "memek", "bangsat", "ngentod", "jembut ", "anjing","brengsek","tai","tolol","babi","goblok","ngewe"]
     if any(word in msg.content.lower() for word in toxic_words):
         try:
             await msg.delete()
