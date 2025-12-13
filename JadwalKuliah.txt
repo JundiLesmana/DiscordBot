@@ -130,6 +130,14 @@ Tugas Kelompok
 -Pancasila - Kel.5
 -Agama - Setoran hafalan Alfatihah & Artinya
 -Setoran hafalan Tahiyat akhir & artinya
+
+Project Forward Chaining dengan web.
+Pengumpulan Tugas Pertemuan 19 https://forms.gle/4qkVpbcUhGZVER986 :
+1. (Yang mengumpulkan hanya ketua kelompok, pastikan nama anggota berada pada file PPT yang disimpan dalam format PDF)
+2. Projek aplikasi yang dibuat, di upload di GitHub, dan linknya sisipkan di dalam study kasus
+3. Didalam study kasus pastikan ada tampilan aplikasi yang sudah dibuat pada point nomer 2
+4. Batas submit Kamis, 18 - Desember - 2025 Pukul 23:59, 
+yang sudah submit dapat dilihat pada link berikut : https://docs.google.com/spreadsheets/d/1_jJfJ8t6aO8jNcrDlrcn8plgUaFGXN6o_fKn49f0kNo/edit?usp=sharing
 --------------------------------------
 UAS
 5 Januari - 10 Januari 2026
