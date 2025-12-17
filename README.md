@@ -55,9 +55,7 @@ Pastikan Anda telah menyiapkan:
 
 ---
 
-## 📦 Instalasi (Step-by-Step)
-
-### 1️⃣ Clone Repository
+### Clone Repository
 ```bash
 git clone https://github.com/JundiLesmana/DiscordBot.git
 cd DiscordBot
