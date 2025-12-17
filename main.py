@@ -96,7 +96,6 @@ webhook_logger = WebhookLogger(WEBHOOK_URL)
 if not DISCORD_TOKEN:
     logger.error("❌ DISCORD_TOKEN tidak ditemukan di environment variables")
     print("❌ DISCORD_TOKEN tidak ditemukan!")
-    # Tetap jalankan health server
     try:
         while True:
             py_time.sleep(60)
@@ -217,12 +216,12 @@ def is_admin(member: discord.Member):
 WIB = timezone(timedelta(hours=7))
 
 def parse_jadwal_file():
-    """Parse file JadwalKuliah.txt menjadi struktur data"""
+    """Parse file jadwal_kuliah.txt menjadi struktur data"""
     try:
-        with open('JadwalKuliah.txt', 'r', encoding='utf-8') as file:
+        with open('jadwal_kuliah.txt', 'r', encoding='utf-8') as file:
             content = file.read()
         
-        print("📖 Membaca file JadwalKuliah.txt...")
+        print("📖 Membaca file jadwal_kuliah.txt...")
         
         # Split by separators (---)
         sections = re.split(r'-{3,}\s*\n', content)
@@ -253,8 +252,8 @@ def parse_jadwal_file():
         
         return jadwal_list
     except FileNotFoundError:
-        logger.error("File JadwalKuliah.txt tidak ditemukan")
-        return [{"header": "Error", "content": "File JadwalKuliah.txt tidak ditemukan", "raw": "Error"}]
+        logger.error("File jadwal_kuliah.txt tidak ditemukan")
+        return [{"header": "Error", "content": "File jadwal_kuliah.txt tidak ditemukan", "raw": "Error"}]
     except Exception as e:
         logger.error(f"Error parsing jadwal: {e}")
         return [{"header": "Error", "content": f"Error parsing: {e}", "raw": "Error"}]
@@ -551,7 +550,6 @@ async def on_message(msg):
 
     activity_tracker.update_activity(msg.author.id)
 
-    # Filter kata kasar
     toxic_words = ["kontol", "memek", "bangsat", "ngentod", "jembut ", "anjing","brengsek","tai","tolol","babi","goblok","ngewe"]
     if any(word in msg.content.lower() for word in toxic_words):
         try:

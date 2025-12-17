@@ -105,7 +105,7 @@ A. Membuat Study kasus dengan format ppt
  ii.wajib ada data gejala & data diagnosa
 B.Memebawa Jurnal Referensi
  i. Download jurnal sesuai study kasus anda.
- ii. Berikan bukti sinta ****** gk kebaca tulisan nya anj
+ ii. Berikan bukti sinta
 C.Membuat sistem
  i.Aplikasi forward chaining sesuai dengan study kasus.
 
