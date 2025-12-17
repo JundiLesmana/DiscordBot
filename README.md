@@ -10,7 +10,7 @@ Bot Discord berbasis **AI multi-engine** dengan integrasi **Google Gemini**, dir
 Techfour Discord Bot adalah bot AI modular yang mampu:
 - Menjawab pertanyaan akademik secara kontekstual
 - Membantu diskusi coding & matematika
-- Mengelola pengingat jadwal kuliah
+- Mengelola pengingat jadwal dan tugas-tugas kuliah
 - Mendukung manajemen komunitas Discord berbasis AI
 
 ---
@@ -61,9 +61,11 @@ Pastikan Anda telah menyiapkan:
 ```bash
 git clone https://github.com/JundiLesmana/DiscordBot.git
 cd DiscordBot
+```
+
+---
 
 ## 🏗️ Diagram Arsitektur
-
 ```text
 ┌──────────────┐
 │   Discord    │
@@ -100,3 +102,5 @@ Additional Services:
 - Scheduler → Pengingat Kuliah
 - Webhook → Logging
 - /health  → Monitoring
+
+---
