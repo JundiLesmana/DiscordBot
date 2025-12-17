@@ -5,7 +5,7 @@ Bot Discord berbasis **AI multi-engine** dengan integrasi **Google Gemini**, dir
 
 ---
 
-## 🚀 Deskripsi Singkat
+## 🚀 Deskripsi
 
 Techfour Discord Bot adalah bot AI modular yang mampu:
 - Menjawab pertanyaan akademik secara kontekstual
