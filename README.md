@@ -100,5 +100,3 @@ Additional Services:
 - Scheduler → Pengingat Kuliah
 - Webhook → Logging
 - /health  → Monitoring
-
----
