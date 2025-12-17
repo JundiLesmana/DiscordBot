@@ -24,7 +24,6 @@ class SmartAIService:
         Router pintar: pilih AI sesuai konteks.
         image_bytes: Jika ada, gunakan untuk OCR atau analisis gambar (bukan URL).
         """
-        # Key cache berdasarkan prompt + hash image_bytes jika ada
         cache_key_prompt = (user_prompt or "")[:50]
         if image_bytes:
             image_hash = hashlib.md5(image_bytes).hexdigest()[:8]
@@ -36,7 +35,6 @@ class SmartAIService:
         if cached and time.time() - cached['t'] < self.CACHE_DURATION:
             return cached['r']
 
-        # Pilih layanan sesuai konteks
         prompt_lower = (user_prompt or "").lower()
         try:
             if image_bytes and self._is_ocr_request(user_prompt):
@@ -128,4 +126,4 @@ class SmartAIService:
             logging.exception("Gemini query failure")
             return f"❌ Gemini Error: {e}"
 
-ai_bot_service = SmartAIService()
+ai_bot_services = SmartAIService()
