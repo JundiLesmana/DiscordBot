@@ -37,7 +37,7 @@ Techfour Discord Bot adalah bot AI modular yang mampu:
   - Google Gemini (LLM & OCR)
   - Wolfram Alpha (Matematika)
   - Hugging Face – CodeGemma (Coding)
-- **Deployment**: Railway, Render, VPS
+- **Deployment**: Railway
 
 ---
 
