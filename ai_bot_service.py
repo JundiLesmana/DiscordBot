@@ -265,20 +265,12 @@ class SmartAIService:
             return f"❌ CodeGemma Error: {str(e)[:100]}"
 
     def _gemini_query(self, text: str) -> str:
-        """Query ke Gemini 2.0 Flash (5M token gratis)"""
+        """Query to Gemini API"""
         try:
             if not self.gemini_key:
                 return "❌ Gemini API key tidak diset di environment variables."
 
-            #Gemini 2.0 Flash
-            model = genai.GenerativeModel(
-                "gemini-2.0-flash-exp",
-                generation_config=genai.types.GenerationConfig(
-                    candidate_count=1,
-                    max_output_tokens=2048,
-                    temperature=0.7,
-                )
-            )
+            model = genai.GenerativeModel("gemini-2.5-flash")
             
             response = model.generate_content(text)
             result = getattr(response, "text", str(response))
