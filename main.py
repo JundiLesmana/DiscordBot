@@ -408,62 +408,26 @@ async def handle_ocr_attachment(attachment, user_id: int, channel):
         await channel.send("❌ Gagal memproses gambar.")
 
 # JADWAL COMMAND HANDLER
-async def handle_jadwal_request(msg, user_prompt: str):
+async def handle_jadwal_request(msg, user_prompt: str) -> bool:
     prompt_lower = user_prompt.lower()
-    
-    # Today
-    if any(kw in prompt_lower for kw in ['jadwal hari ini', 'kuliah hari ini', 'hari ini']):
-        await msg.channel.typing()
-        jadwal = get_current_jadwal()
-        
-        if jadwal:
-            response = f"📚 **JADWAL KULIAH HARI INI**\n**Periode:** {jadwal['header']}\n\n```{jadwal['content']}```"
-            await msg.channel.send(response[:2000])
-        else:
-            await msg.channel.send("📚 Tidak ada jadwal kuliah untuk hari ini.")
-        return True
-    
-    # This week
-    if any(kw in prompt_lower for kw in ['minggu ini', 'jadwal minggu ini', 'kuliah minggu ini']):
-        await msg.channel.typing()
-        jadwal_list = get_jadwal_this_week()
-        
-        if jadwal_list:
-            response = f"📚 **JADWAL KULIAH MINGGU INI** 📚\n\n"
-            for j in jadwal_list:
-                response += f"**{j['header']}**\n```{j['content']}```\n\n"
-            await msg.channel.send(response[:2000])
-        else:
-            await msg.channel.send("📚 Tidak ada jadwal untuk minggu ini.")
-        return True
-    
-    # Next week
-    if any(kw in prompt_lower for kw in ['minggu depan', 'next week', 'jadwal minggu depan']):
-        await msg.channel.typing()
-        jadwal_list = get_jadwal_next_week()
-        
-        if jadwal_list:
-            response = f"📚 **JADWAL KULIAH MINGGU DEPAN** 📚\n\n"
-            for j in jadwal_list:
-                response += f"**{j['header']}**\n```{j['content']}```\n\n"
-            await msg.channel.send(response[:2000])
-        else:
-            await msg.channel.send("📚 Tidak ada jadwal untuk minggu depan.")
-        return True
-    
-    # General jadwal
-    if any(kw in prompt_lower for kw in ['jadwal', 'kuliah', 'elearning', 'tatap muka', 'uas']):
-        await msg.channel.typing()
-        jadwal_list = get_jadwal_this_week()
-        
-        if jadwal_list:
-            response = f"📚 **JADWAL KULIAH MINGGU INI** 📚\n\n"
-            for j in jadwal_list:
-                response += f"**{j['header']}**\n```{j['content']}```\n\n"
-            response += "💡 *Ketik '@Techfour jadwal hari ini' atau '@Techfour jadwal minggu depan'*"
-            await msg.channel.send(response[:2000])
-        else:
-            await msg.channel.send("📚 Tidak ada jadwal. Coba tanya untuk periode tertentu.")
+
+    jadwal_intents = [
+        "jadwal", "cek jadwal", "lihat jadwal", "info jadwal",
+        "jadwal kuliah", "jadwal uas", "jadwal elearning",
+        "jadwal minggu", "jadwal hari", "kapan kuliah", "uas kapan"
+    ]
+
+    if any(intent in prompt_lower for intent in jadwal_intents):
+        jadwal = get_jadwal_this_week()
+        if not jadwal:
+            await msg.channel.send("📚 Tidak ada jadwal.")
+            return True
+
+        resp = "📚 **JADWAL KULIAH**\n\n"
+        for j in jadwal:
+            resp += f"**{j['header']}**\n```{j['content']}```\n\n"
+
+        await msg.channel.send(resp[:2000])
         return True
     
     return False
