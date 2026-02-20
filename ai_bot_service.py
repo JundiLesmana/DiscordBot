@@ -1,3 +1,4 @@
+import re
 import os
 import time
 import asyncio
@@ -103,7 +104,10 @@ class SmartAIService:
         self.response_cache[key] = {'r': response, 't': time.time()}
 
     def _is_math_physics_query(self, prompt: str) -> bool:
-        """Deteksi query matematika/fisika untuk Wolfram"""
+        # Detect calculator style
+        if re.search(r'\d+\s*[\+\-\*/]\s*\d+', prompt):
+            return True
+
         math_keywords = [
             "integral", "diferensial", "turunan", "limit", "matrix", "matriks",
             "persamaan", "fungsi", "kalkulus", "aljabar", "trigonometri",
@@ -114,19 +118,23 @@ class SmartAIService:
         ]
         return any(keyword in prompt for keyword in math_keywords)
 
+
     def _is_code_query(self, prompt: str) -> bool:
-        """Deteksi query programming untuk CodeGemma"""
-        code_keywords = [
-            "code", "python", "javascript", "java", "c++", "html", "css",
-            "php", "c", "typescript", "json", "go", "rust", "csharp", "ruby",
-            "function", "fungsi", "class", "kelas", "variable", "variabel",
-            "error", "bug", "debug", "syntax", "compile", "kompilasi",
-            "script", "program", "algorithm", "algoritma", "loop", "array",
-            "string", "int", "float", "boolean", "if", "else", "while", "for",
-            "def ", "import ", "return ", "print(", "console.log",
-            "troubleshoot", "fix code", "perbaiki code", "cleaning code", "naming code", "simplify code"
-        ]
-        return any(keyword in prompt for keyword in code_keywords)
+        # intent eksplisit bikin / minta code
+        if re.search(r'\b(buatkan|buat|generate|perbaiki|fix|debug|refactor)\b', prompt):
+            return True
+
+        # bahasa pemrograman
+        if re.search(r'\b(c\+\+|cpp|python|java|javascript|js|php|go|rust|c#|typescript)\b', prompt):
+            return True
+
+        # ciri struktur kode
+        if any(token in prompt for token in [
+            "{", "}", ";", "#include", "def ", "class ", "import ", "main("
+        ]):
+            return True
+
+        return False
 
     def _is_ocr_request(self, prompt: str) -> bool:
         """Deteksi permintaan OCR"""
@@ -139,7 +147,7 @@ class SmartAIService:
     def _ocr_with_gemini(self, image_bytes: bytes, prompt: str) -> str:
         """OCR menggunakan Gemini Flash (5M token gratis)"""
         try:
-            model = genai.GenerativeModel("gemini-2.0-flash-exp")
+            model = genai.GenerativeModel("gemini-2.5-flash")
 
             if not prompt or self._is_ocr_request(prompt):
                 prompt = "Ekstrak semua teks yang terlihat di gambar ini dengan rapi dan terstruktur."
@@ -257,20 +265,12 @@ class SmartAIService:
             return f"❌ CodeGemma Error: {str(e)[:100]}"
 
     def _gemini_query(self, text: str) -> str:
-        """Query ke Gemini 2.0 Flash (5M token gratis)"""
+        """Query to Gemini API"""
         try:
             if not self.gemini_key:
                 return "❌ Gemini API key tidak diset di environment variables."
 
-            #Gemini 2.0 Flash
-            model = genai.GenerativeModel(
-                "gemini-2.0-flash-exp",
-                generation_config=genai.types.GenerationConfig(
-                    candidate_count=1,
-                    max_output_tokens=2048,
-                    temperature=0.7,
-                )
-            )
+            model = genai.GenerativeModel("gemini-2.5-flash")
             
             response = model.generate_content(text)
             result = getattr(response, "text", str(response))
